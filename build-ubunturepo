@@ -89,7 +89,7 @@ if [ "$SETUP" = "1" ];then
 
    apt-get -y install $REPREPO $DEVSCRIPTS $DEBHELPER $QUILT
 
-   echo "Finised setup for xcat-dep build. Rerun this script with SETUP=0 LOCAL_KEY=1 flags"
+   echo "Finished setup for xcat-dep build. Rerun this script with SETUP=0 LOCAL_KEY=1 flags"
    exit 1
 fi
 
