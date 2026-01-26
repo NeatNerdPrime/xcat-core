@@ -2228,7 +2228,7 @@ sub CheckVersion
     Example:
          my $os=(xCAT::Utils->osver{ ...}
     Comments:
-        type=all does not return platform for backward compatibility reasons
+         none
 
 =cut
 

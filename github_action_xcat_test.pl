@@ -281,7 +281,6 @@ sub build_xcat_core{
 
     my $cmd = "sudo ./build-ubunturepo -c UP=0 BUILDALL=1 GPGSIGN=0";
     @output = runcmd("$cmd");
-    print join "", map { "build-ubunturepo.out: $_\n" } @output;
     if($::RUNCMD_RC){
         my $lastline = $output[-1];
         $lastline =~ s/[\r\n\t\\"']*//g;
