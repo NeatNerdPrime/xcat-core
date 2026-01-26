@@ -2228,7 +2228,7 @@ sub CheckVersion
     Example:
          my $os=(xCAT::Utils->osver{ ...}
     Comments:
-         none
+        none
 
 =cut
 

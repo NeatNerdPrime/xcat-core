@@ -54,23 +54,6 @@ sub runcmd
 }
 
 #--------------------------------------------------------
-# Fuction name: echocmd
-# Description: run a command after 'cmd' label in one case
-#   the output is echoed to the terminal
-# Attributes:
-# Return code:
-#      $::RUNCMD_RC : the return code of command
-#--------------------------------------------------------
-sub echocmd
-{
-    my ($cmd) = @_;
-    $::RUNCMD_RC = 0;
-    system($cmd);
-    $::RUNCMD_RC = $? >> 8;
-    undef;
-}
-
-#--------------------------------------------------------
 # Fuction name: get_files_recursive
 # Description:  Search all file in one directory recursively
 # Attributes:
@@ -296,16 +279,11 @@ sub send_back_comment{
 sub build_xcat_core{
     my @output;
 
-    my $dest = $ENV{RUNNER_WORKSPACE};
-    my $cmd = <<"EOF";
-find . -name changelog.dch -delete;
-
-set -x
-sudo DEBEMAIL="\$DEBEMAIL" DEBFULLNAME="\$DEBFULLNAME" \\
-    ./build-ubunturepo -c UP=0 BUILDALL=1 GPGSIGN=0 DEST="$dest"
-EOF
-    echocmd("$cmd");
+    my $cmd = "sudo ./build-ubunturepo -c UP=0 BUILDALL=1 GPGSIGN=0";
+    @output = runcmd("$cmd");
     if($::RUNCMD_RC){
+        my $lastline = $output[-1];
+        $lastline =~ s/[\r\n\t\\"']*//g;
         print "[build_xcat_core] $cmd ....[Failed]\n";
         $check_result_str .= "> **BUILD ERROR**, Please click ``Details`` label in ``Merge pull request`` box for detailed information";
         print $check_result_str;
@@ -333,12 +311,11 @@ sub install_xcat{
                "sudo echo \"deb [arch=ppc64el allow-insecure=yes] http://xcat.org/files/xcat/repos/apt/devel/xcat-dep bionic main\" >> /etc/apt/sources.list",
                "sudo wget -q -O - \"http://xcat.org/files/xcat/repos/apt/apt.key\" | sudo apt-key add -",
                "sudo apt-get -qq --allow-insecure-repositories update");
-    chdir "$ENV{RUNNER_WORKSPACE}/debsfeat/prepare-merge-upstream/xcat-core";
-    my $cwd = Cwd::cwd();
+    chdir $ENV{RUNNER_WORKSPACE};;
 
     my @output;
     foreach my $cmd (@cmds){
-        print "[install_xcat] running $cmd at $cwd\n";
+        print "[install_xcat] running $cmd\n";
         @output = runcmd("$cmd");
         if($::RUNCMD_RC){
             print RED "[install_xcat] $cmd. ...[Failed]\n";
