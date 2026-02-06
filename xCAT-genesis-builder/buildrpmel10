@@ -1,0 +1,88 @@
+#!/bin/bash
+# Build the xCAT-genesis-base rpm on a host system.
+# Option 1:  install the xCAT-genesis-builder rpm (that includes this file) on a system installed with
+#            the distro you want to use to build xCAT-genesis-base.
+# Option 2:  untar the root file system of the distro you want to use and then chroot into it and copy
+#            this whole dir into it somewhere (like /tmp).
+# Then run this script.  The optional 1st arg should be mcp if you are building against mcp.
+
+# Currently, *Fedora 28* and *RedHat 8* are the only OSes supported to build genesis-base for ppc64, and Centos 6.5 for x86_64
+
+DIR=`dirname $0`
+#DIR=`realpath $DIR`
+DIR=`readlink -f $DIR`
+BUILDARCH=`uname -m`
+REQUIRED_PACKAGES="rpmdevtools rpm-build screen lldpad mstflint ipmitool pciutils mdadm dosfstools usbutils bind-utils psmisc nmap-ncat ethtool kexec-tools"
+DISTRO=$(perl -lane 'print $1 if /^ID="?([^\"\$]+)/' < /etc/os-release)
+
+# Install required packages
+dnf install -y epel-release
+dnf -y install $REQUIRED_PACKAGES || {
+    echo "ERROR: Can not install required package"
+    exit 1
+}
+
+rpmdev-setuptree
+
+DRACUTMODDIR=/usr/lib/dracut/modules.d/97xcat
+mkdir -p $DRACUTMODDIR
+case "$DISTRO" in
+    ubuntu)
+        cp -a "$DIR/dracut_105/ubuntu/module-setup.sh" $DRACUTMODDIR/
+        ;;
+    rhel)
+        cp -a "$DIR/dracut_105/el/module-setup.sh" $DRACUTMODDIR/
+        ;;
+    *)
+        echo "Warning: Unknown distro $DISTRO, assuming RHEL clone"
+        cp -a "$DIR/dracut_105/el/module-setup.sh" $DRACUTMODDIR/
+        ;;
+esac
+dracut -m "xcat base" --no-early-microcode -N -f /tmp/xcatgenesis.$$.rfs $KERNELVERSION
+
+echo Expanding the initramfs into /tmp/xcatgenesis.$$/opt/xcat/share/xcat/netboot/genesis/$BUILDARCH/fs ...
+
+mkdir -p /tmp/xcatgenesis.$$/opt/xcat/share/xcat/netboot/genesis/$BUILDARCH/fs
+cd /tmp/xcatgenesis.$$/opt/xcat/share/xcat/netboot/genesis/$BUILDARCH/fs
+zcat /tmp/xcatgenesis.$$.rfs | cpio -dumi
+
+# add the perl library
+# add /usr/share/ntp/lib for Fedora26 ppc64, the ntp-perl will installed libraries under it
+PERL_LIB_DIR="/usr/share/perl5 /usr/lib64/perl5 /usr/local/lib64/perl5 /usr/local/share/perl5 /usr/share/ntp/lib"
+for d in `echo $PERL_LIB_DIR`; do
+    if [ -e $d ]; then
+        echo Adding perl libary "$d"
+        TEMP_DIR=/tmp/xcatgenesis.$$/opt/xcat/share/xcat/netboot/genesis/$BUILDARCH/fs/"$d"
+        mkdir -p $TEMP_DIR
+        cp -a -t $TEMP_DIR $d/.
+    fi
+done
+
+# create directory for ssh-keygen
+mkdir -p /tmp/xcatgenesis.$$/opt/xcat/share/xcat/netboot/genesis/$BUILDARCH/fs/etc/ssh
+mkdir -p /tmp/xcatgenesis.$$/opt/xcat/share/xcat/netboot/genesis/$BUILDARCH/fs/lib/udev/rules.d/
+
+# create the predictable naming for nics
+LIB_UDEV_RULES="/lib/udev/rules.d/"
+if [ ! -e "$LIB_UDEV_RULES/80-net-name-slot.rules" ]; then
+    cp $DRACUTMODDIR/80-net-name-slot.rules /tmp/xcatgenesis.$$/opt/xcat/share/xcat/netboot/genesis/$BUILDARCH/fs/lib/udev/rules.d/
+    if [ $? -ne 0 ]; then
+        echo "ERROR - expanding the initramfs, please correct the issues and try again"
+        exit 1
+    fi
+fi
+
+# add the kernel
+echo Adding kernel /boot/vmlinuz-$BUILDARCH ...
+cp /boot/vmlinuz-`uname -r` /tmp/xcatgenesis.$$/opt/xcat/share/xcat/netboot/genesis/$BUILDARCH/kernel
+cd -
+
+# create tar file
+echo Tarring /tmp/xcatgenesis.$$/opt into ~/rpmbuild/SOURCES/xCAT-genesis-base-$BUILDARCH.tar.bz2 ...
+cd /tmp/xcatgenesis.$$
+tar jcf ~/rpmbuild/SOURCES/xCAT-genesis-base-$BUILDARCH.tar.bz2 opt
+
+# build the rpm
+echo Building xCAT-genesis-base rpm from ~/rpmbuild/SOURCES/xCAT-genesis-base-$BUILDARCH.tar.bz2 and $DIR/xCAT-genesis-base.spec ...
+rpmbuild -ba $DIR/xCAT-genesis-base.spec
+rm -rf $DRACUTMODDIR
