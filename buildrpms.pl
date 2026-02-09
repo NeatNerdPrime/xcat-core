@@ -33,6 +33,7 @@ my @PACKAGES = qw(
     xCAT-probe
     xCAT-rmc
     xCAT-server
+    xCAT-genesis-scripts
     xCAT-test
     xCAT-vlan);
 
@@ -96,6 +97,14 @@ sub sed (&$) {
     write_text($path, $content);
 }
 
+sub is_in {
+    my $needle = shift;
+    for (@_) {
+        return 1 if $_ eq $needle;
+    }
+    return 0;
+}
+
 # product(\@A, \@B) returns the catersian product of \@A and \@B
 sub product {
     my ($a, $b) = @_;
@@ -141,6 +150,8 @@ sub buildsources {
           cp xcat.conf.apach24 $SOURCES
           cp xCATMN $SOURCES
         '};
+    } elsif ($pkg eq "xCAT-genesis-scripts") {
+      `tar -cjf "$SOURCES/$pkg.tar.bz2" $pkg`;
     } else {
       `tar -czf "$SOURCES/$pkg-$VERSION.tar.gz" $pkg`;
     }
@@ -177,8 +188,14 @@ sub buildpkgs {
     my $optsref = \%opts;
     my $chroot = "$pkg-$target";
 
+    my @native_pkgs = qw(
+        xCAT
+        xCAT-genesis-scripts
+    );
+
+    # get x86_64 from rhel+epel-9-x86_64
     my $targetarch = (split /-/, $target, 3)[2];
-    my $arch = $pkg eq "xCAT" ? $targetarch : "noarch";
+    my $arch = is_in($pkg, @native_pkgs) ? $targetarch : "noarch";
 
     my $diskcache = "dist/$target/rpms/$pkg-$VERSION-$RELEASE.$arch.rpm";
     return if -f $diskcache and not $opts{force};
@@ -186,7 +203,14 @@ sub buildpkgs {
     my @opts;
     push @opts, "--quiet" unless $opts{verbose};
 
-    say "Building $diskcache";
+    my $spkgname = sub {
+        return "${pkg}-${arch}-${VERSION}-${RELEASE}.src.rpm"
+            if $pkg eq 'xCAT-genesis-scripts';
+
+        return "$pkg-${VERSION}-${RELEASE}.src.rpm";
+    }->();
+
+    say "Building $pkg $diskcache";
 
     sh(<<"EOF");
 mock -r $chroot \\
@@ -196,7 +220,7 @@ mock -r $chroot \\
     --define "release $RELEASE" \\
     --define "gitinfo $GITINFO" \\
     --resultdir "dist/$target/rpms/" \\
-    --rebuild dist/$target/srpms/$pkg-${VERSION}-${RELEASE}.src.rpm
+    --rebuild dist/$target/srpms/$spkgname
 EOF
 }
 
@@ -312,3 +336,17 @@ sub main {
 
 main();
 
+__END__;
+
+=head1 SYNOPSIS
+
+Build all xCAT RPM packages in parallel using mock for isolation
+
+=head1 KNOWN ERRORS
+
+=over 4
+
+    1. Error    : GPG error during mock cache creation/update
+       Cause    : Out-dated distribution-gpg-keys in host machine
+       Solution : Run `dnf update -y distribution-gpg-keys` in the host.
+=back
