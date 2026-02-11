@@ -51,7 +51,8 @@ install() {
     dracut_install /lib64/libnss_dns.so.2
     dracut_install poweroff hwclock date /usr/share/terminfo/x/xterm /usr/share/terminfo/s/screen /etc/nsswitch.conf /etc/services
     dracut_install /sbin/rsyslogd /etc/protocols umount /bin/rpm /usr/lib/rpm/rpmrc
-    dracut_install chmod /sbin/route /sbin/ifconfig /usr/bin/whoami /usr/bin/head /usr/bin/tail basename /etc/redhat-release ping tr lsusb /usr/share/hwdata/usb.ids #ibm fw wrapper requirements
+    #dracut_install chmod /sbin/route /sbin/ifconfig /usr/bin/whoami /usr/bin/head /usr/bin/tail basename /etc/redhat-release ping tr lsusb /usr/share/hwdata/usb.ids #ibm fw wrapper requirements
+    dracut_install chmod ip /usr/bin/whoami /usr/bin/head /usr/bin/tail basename /etc/redhat-release ping tr lsusb /usr/share/hwdata/usb.ids #ibm fw wrapper requirements
     dracut_install efibootmgr dmidecode #uxspi prereqs, but will use dmidecode to improve decision on loading ipmi_si
     dracut_install lldptool
     dracut_install /usr/share/zoneinfo/posix/Zulu

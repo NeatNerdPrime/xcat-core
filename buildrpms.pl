@@ -5,12 +5,18 @@ use warnings;
 
 use feature 'say';
 
-use Data::Dumper;
-use File::Copy ();
-use File::Slurper qw(read_text write_text);
-use Parallel::ForkManager;
-use Getopt::Long qw(GetOptions);
+use Carp;
 use Cwd qw();
+use Data::Dumper;
+use File::Copy qw(cp);
+use File::Path qw(make_path);
+use File::Slurper qw(read_text write_text);
+use FindBin qw($Bin);
+use Getopt::Long qw(GetOptions);
+use Parallel::ForkManager;
+
+use autodie;
+use autodie qw(cp);
 
 my $SOURCES = "$ENV{HOME}/rpmbuild/SOURCES";
 my $VERSION = read_text("Version");
@@ -29,13 +35,15 @@ my @PACKAGES = qw(
     xCAT-buildkit
     xCAT-client
     xCAT-confluent
+    xCAT-genesis-base
+    xCAT-genesis-scripts
     xCAT-openbmc-py
     xCAT-probe
     xCAT-rmc
     xCAT-server
-    xCAT-genesis-scripts
     xCAT-test
-    xCAT-vlan);
+    xCAT-vlan
+);
 
 my @TARGETS = qw(
     rhel+epel-8-x86_64
@@ -44,47 +52,35 @@ my @TARGETS = qw(
 
 
 my %opts = (
-    targets => \@TARGETS,
-    packages => \@PACKAGES,
-    nproc => int(`nproc --all`),
-    force => 0,
-    verbose => 0,
-    xcat_dep_path => "$PWD/../xcat-dep/",
     configure_nginx => 0,
+    force => 0,
     help => 0,
     nginx_port => 8080,
+    nproc => int(`nproc --all`),
+    packages => \@PACKAGES,
+    targets => \@TARGETS,
+    verbose => 0,
+    xcat_dep_path => "$PWD/../xcat-dep/",
 );
 
 GetOptions(
-    "target=s@" => \$opts{targets},
-    "package=s@" => \$opts{packages},
-    "nproc=i" => \$opts{nproc},
-    "verbose" => \$opts{verbose},
-    "force" => \$opts{force},
-    "xcat_dep_path=s" => \$opts{xcat_dep_path},
     "configure_nginx" => \$opts{configure_nginx},
+    "force" => \$opts{force},
     "help" => \$opts{help},
     "nginx_port" => \$opts{nginx_port},
+    "nproc=i" => \$opts{nproc},
+    "package=s@" => \$opts{packages},
+    "target=s@" => \$opts{targets},
+    "verbose" => \$opts{verbose},
+    "xcat_dep_path=s" => \$opts{xcat_dep_path},
 ) or usage();
 
 sub sh {
     my ($cmd) = @_;
     say "Running: $cmd"
         if $opts{verbose};
-    open my $fh, "-|", "bash -lc '$cmd'" or die "cannot run $cmd: $!";
-
-    while (my $line = <$fh>) {
-        print $line
-            if $opts{verbose};
-    }
-    close $fh;
-    return $? >> 8;
-}
-
-# cp $src, $dst copies $src to $dst or aborts with an error message
-sub cp {
-    my ($src, $dst) = @_;
-    File::Copy::copy($src, $dst) or die "copy $src, $dst failed: $!";
+    system($cmd);
+    $? >> 8;
 }
 
 # sed { s/foo/bar/ } $filepath applies s/foo/bar/ to the file at $filepath
@@ -102,7 +98,7 @@ sub is_in {
     for (@_) {
         return 1 if $_ eq $needle;
     }
-    return 0;
+    0;
 }
 
 # product(\@A, \@B) returns the catersian product of \@A and \@B
@@ -124,10 +120,122 @@ sub createmockconfig {
     $contents =~ s/config_opts\['root'\]\s+=.*/config_opts['root'] = \"$chroot\"/;
     if ($pkg eq "perl-xCAT") {
         # perl-generators is required for having perl(xCAT::...) symbols
-        # exported by the RPM 
+        # exported by the RPM
         $contents .= "config_opts['chroot_additional_packages'] = 'perl-generators'\n";
     }
     write_text($cfgfile, $contents);
+}
+
+sub buildsources_genesis_base() {
+    die "Assertion failed! No directory xCAT-genesis-builder in the current directory"
+        unless -d "./xCAT-genesis-builder";
+
+    my @deps = qw(
+        bind-utils
+        dosfstools
+        ethtool
+        ipmitool
+        kexec-tools
+        lldpad
+        mdadm
+        mstflint
+        nmap-ncat
+        net-tools
+        pciutils
+        psmisc
+        rpm-build
+        rpmdevtools
+        screen
+        usbutils
+    );
+    sh("dnf install -y " . join " ", @deps)
+        and die "Error installing packages $?";
+
+    my $dracutmoddir = "/usr/lib/dracut/modules.d/97xcat/";
+
+    my $buildarch = `uname -m`;
+    my $kernelversion = `uname -r`;
+    chomp $buildarch;
+    chomp $kernelversion;
+
+    my $genesispath = "/tmp/xcatgenesis.$$";
+    my $buildpath = "$genesispath/opt/xcat/share/xcat/netboot/genesis/$buildarch";
+
+    make_path $dracutmoddir;
+    make_path "$buildpath/fs/etc/ssh/";
+
+    my @files = map { "$Bin/xCAT-genesis-builder/dracut_105/el/$_" }
+        qw(
+            module-setup.sh
+            xcat-cmdline.sh
+            xcatroot
+            dhclient.conf
+            dhclient-script
+            rsyslog.conf
+        );
+    # copy @files to $dracutmoddir
+    cp $_, $dracutmoddir for @files;
+
+    # The dependents of these must be updated
+    # * netstat
+    # * /sbin/route
+    # * /sbin/ifconfig -> net-tool
+    # * nslookup
+
+
+
+    my $opts = $opts{verbose} ? "set -x" : "";
+    sh(<<"EOF");
+$opts
+dracut --compress gzip -m "xcat base" --no-early-microcode -N -f $genesispath.rfs;
+rm -rf $buildpath/fs || :
+mkdir -p $buildpath/fs || :
+cd $buildpath/fs
+zcat $genesispath.rfs | cpio -dumi
+EOF
+
+    my @perl_lib_dir = qw(
+        /usr/share/perl5
+        /usr/lib64/perl5
+        /usr/local/lib64/perl5
+        /usr/local/share/perl5
+        /usr/share/ntp/lib
+    );
+
+    for my $d (@perl_lib_dir) {
+        next unless -d $d;
+        my $temp_dir = "$buildpath/fs/$d";
+        make_path $temp_dir;
+        # cp function does not copy directories recursively
+        `cp -a -t $temp_dir $d/.`;
+    }
+
+    make_path "$buildpath/fs/lib/udev/rules.d/";
+    my $oldcwd = Cwd::cwd();
+    my $lib_udev_rules="/lib/udev/rules.d/";
+    cp "$lib_udev_rules/80-net-name-slot.rules", "$buildpath/fs/lib/udev/rules.d/"
+        if -e "$lib_udev_rules/80-net-name-slot.rules";
+
+    make_path("$buildpath/kernel/");
+    cp "/boot/vmlinuz-$kernelversion", "$buildpath/kernel/";
+
+    # Create the targz
+    #
+    # Note:
+    #
+    #   Deletes character devices from the genesis-base
+    #   image filesystem prior to tarball creation. The installation
+    #   of the package fails in vanilla containers with "Operation not
+    #   permited" during the creation of
+    #
+    #       /opt/xcat/../genesis/../fs/dev/{console,random,...}
+    #
+    #   otherwise.
+    sh(<<"EOF")
+cd $genesispath
+find . -type c -delete
+tar jcf $SOURCES/xCAT-genesis-base-$buildarch.tar.bz2 opt
+EOF
 }
 
 sub buildsources {
@@ -139,7 +247,7 @@ sub buildsources {
             cp "xCAT-genesis-scripts/usr/bin/$f", "$pkg/postscripts/$f";
             sed { s/xcat.genesis.$f/$f/ } "${pkg}/postscripts/$f";
         }
-        qx {bash -c '
+        sh(<<'EOF');
           cd xCAT
           tar --exclude upflag -czf $SOURCES/postscripts.tar.gz  postscripts LICENSE.html
           tar -czf $SOURCES/prescripts.tar.gz  prescripts
@@ -149,20 +257,29 @@ sub buildsources {
           cp xcat.conf $SOURCES
           cp xcat.conf.apach24 $SOURCES
           cp xCATMN $SOURCES
-        '};
+EOF
     } elsif ($pkg eq "xCAT-genesis-scripts") {
-      `tar -cjf "$SOURCES/$pkg.tar.bz2" $pkg`;
+      sh qq(tar -cjf "$SOURCES/$pkg.tar.bz2" $pkg);
+    } elsif ($pkg eq "xCAT-genesis-base") {
+        buildsources_genesis_base();
     } else {
-      `tar -czf "$SOURCES/$pkg-$VERSION.tar.gz" $pkg`;
+      sh qq(tar -czf "$SOURCES/$pkg-$VERSION.tar.gz" $pkg);
     }
 }
 
 sub buildspkgs {
     my ($pkg, $target) = @_;
+
     my $chroot = "$pkg-$target";
 
     my $diskcache = "dist/$target/srpms/$pkg-$VERSION-$RELEASE.src.rpm";
     return if -f $diskcache and not $opts{force};
+
+    my $dir = sub {
+        return "xCAT-genesis-builder"
+            if $pkg eq "xCAT-genesis-base";
+        $pkg;
+    }->();
 
     my @opts;
     push @opts, "--quiet" unless $opts{verbose};
@@ -177,7 +294,7 @@ mock -r $chroot \\
     --define "release $RELEASE" \\
     --define "gitinfo $GITINFO" \\
     --buildsrpm \\
-    --spec $pkg/$pkg.spec \\
+    --spec $dir/$pkg.spec \\
     --sources $SOURCES \\
     --resultdir "dist/$target/srpms/"
 EOF
@@ -195,6 +312,11 @@ sub buildpkgs {
 
     # get x86_64 from rhel+epel-9-x86_64
     my $targetarch = (split /-/, $target, 3)[2];
+
+    # get the builder arch, xCAT-genesis-base include it in its package name
+    my $nativearch = `uname -m`;
+    chomp $nativearch;
+    $nativearch = "ppc64" if $nativearch =~ /^ppc/;
     my $arch = is_in($pkg, @native_pkgs) ? $targetarch : "noarch";
 
     my $diskcache = "dist/$target/rpms/$pkg-$VERSION-$RELEASE.$arch.rpm";
@@ -206,6 +328,8 @@ sub buildpkgs {
     my $spkgname = sub {
         return "${pkg}-${arch}-${VERSION}-${RELEASE}.src.rpm"
             if $pkg eq 'xCAT-genesis-scripts';
+        return "xCAT-genesis-base-${nativearch}-${VERSION}-${RELEASE}.src.rpm"
+            if $pkg eq 'xCAT-genesis-base';
 
         return "$pkg-${VERSION}-${RELEASE}.src.rpm";
     }->();
@@ -247,7 +371,7 @@ EOF
         my $fullpath = "$PWD/dist/$target/rpms";
         $conf .= <<"EOF";
     location /$target/ {
-        alias $fullpath/; 
+        alias $fullpath/;
         autoindex on;
         index off;
         allow all;
@@ -257,7 +381,7 @@ EOF
     # TODO:I need one xcat-dep for each target
     $conf .= <<"EOF";
     location /xcat-dep/ {
-        alias $xcat_dep_path; 
+        alias $xcat_dep_path;
         autoindex on;
         index off;
         allow all;

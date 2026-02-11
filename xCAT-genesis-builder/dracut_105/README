@@ -1,0 +1,9 @@
+Dracut modules for EL10
+
+
+Notes:
+
+* For now `ubuntu` is just a symlink to EL module, we
+  may or may not need to diverge later.
+* These files were copied from ../ so we can adapt they
+  without breaking old behavior

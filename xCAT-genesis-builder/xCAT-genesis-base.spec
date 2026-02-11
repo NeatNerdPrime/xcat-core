@@ -1,6 +1,5 @@
-%global version %(rpm -q xCAT --qf "%{VERSION}" 2>/dev/null | grep -Po '[0-9\.]+' || echo "2.17.0")
-Version: %{version}
-Release: %{?release:%{release}}%{!?release:snap%(date +"%Y%m%d%H%M")}
+Version: %{?version:%{version}}%{!?version:%(cat Version)}
+Release: %{?release:%{release}}%{!?release:%(cat Release)}
 %ifarch i386 i586 i686 x86
 %define tarch x86
 %endif
@@ -57,7 +56,7 @@ cd -
 %pretrans -p <lua>
 -- Lua block of code for removing a directory recursively
 -- The Lua function remove_directory_deep should be called
--- with a directory name or, in a spec file, also with
+-- with a directory name in a spec file, also with
 -- a rpm macro defined to a directory name. This function
 -- is a possible lua equivalent of the shell command "rm -rf"
 -- using the lua posix extension embedded in rpm
