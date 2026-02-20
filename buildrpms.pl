@@ -87,6 +87,7 @@ my %opts = (
     packages => \@PACKAGES,
     targets => \@TARGETS,
     verbose => 0,
+    setup_vhpc_repo => 0,
     xcat_dep_path => "$PWD/../xcat-dep/",
 );
 
@@ -100,6 +101,7 @@ GetOptions(
     "target=s@" => \$opts{targets},
     "verbose" => \$opts{verbose},
     "xcat_dep_path=s" => \$opts{xcat_dep_path},
+    "setup_vhpc_repo" => \$opts{setup_vhpc_repo},
 ) or usage();
 
 sub sh {
@@ -135,6 +137,17 @@ sub product {
         my $x = $_;
         map [ $x, $_ ], @$b;
     } @$a
+}
+
+sub setup_vhpc_repo {
+    write_text("/etc/yum.repos.d/VersatusHPC.repo", <<'EOF');
+[VersatusHPC]
+name=VersatusHPC
+baseurl=https://mirror.versatushpc.com.br/versatushpc/rpm/el10/
+gpgcheck=0
+EOF
+    system("dnf makecache --repoid=VersatusHPC");
+    $? >> 0;
 }
 
 sub createmockconfig {
@@ -174,9 +187,13 @@ sub buildsources_genesis_base() {
         rpmdevtools
         screen
         usbutils
+
+        nfs-utils rpcbind
+        dhclient
     );
     sh("dnf install -y " . join " ", @deps)
         and die "Error installing packages $?";
+
 
     my $dracutmoddir = "/usr/lib/dracut/modules.d/97xcat/";
 
@@ -417,6 +434,7 @@ EOF
 EOF
     write_text("/etc/nginx/conf.d/xcat-repos.conf", $conf);
     `systemctl restart nginx`;
+    $? >> 8;
 }
 
 sub update_repo {
@@ -456,7 +474,8 @@ sub usage {
 
 sub main {
     return usage() if $opts{help};
-    return configure_nginx() if $opts{configure_nginx};
+    return exit(configure_nginx()) if $opts{configure_nginx};
+    return exit(setup_vhpc_repo()) if $opts{setup_vhpc_repo};
 
     my @rpms = product($opts{packages}, $opts{targets});
     my $pm = Parallel::ForkManager->new($opts{nproc});
