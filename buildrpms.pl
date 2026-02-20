@@ -5,6 +5,33 @@ use warnings;
 
 use feature 'say';
 
+sub install_deps {
+    system(<<"EOF");
+    set -x
+    source /etc/os-release
+    case "\$ID" in
+        rhel)
+            subscription-manager repos --enable codeready-builder-for-rhel-10-\$(arch)-rpms
+            ;;
+        *)
+            dnf config-manager --set-enabled crb
+            ;;
+    esac
+    dnf install -y perl-generators https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm
+    dnf install -y \$(/usr/lib/rpm/perl.req $0)
+    dnf install -y tar mock nginx createrepo podman rpmdevtools
+
+    rpmdev-setuptree
+EOF
+    $? >> 8;
+}
+
+BEGIN {
+
+    exit(install_deps())
+        if grep { "--install_deps" eq $_ } @ARGV;
+}
+
 use Carp;
 use Cwd qw();
 use Data::Dumper;
@@ -247,7 +274,7 @@ sub buildsources {
             cp "xCAT-genesis-scripts/usr/bin/$f", "$pkg/postscripts/$f";
             sed { s/xcat.genesis.$f/$f/ } "${pkg}/postscripts/$f";
         }
-        sh(<<'EOF');
+        sh(<<"EOF");
           cd xCAT
           tar --exclude upflag -czf $SOURCES/postscripts.tar.gz  postscripts LICENSE.html
           tar -czf $SOURCES/prescripts.tar.gz  prescripts
