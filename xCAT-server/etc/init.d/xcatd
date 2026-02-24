@@ -54,8 +54,16 @@ MStatus()
 }
 
 if [ -f /etc/init.d/functions ]; then
-  #echo RH
+  # EL8-
   . /etc/init.d/functions
+  START_DAEMON=daemon
+  STATUS=MStatus
+  LOG_SUCCESS=RHSuccess
+  LOG_FAILURE=RHFailure
+  LOG_WARNING=passed
+elif [ -f /etc/rc.d/init.d/functions ]; then
+  # EL9+
+  . /etc/rc.d/init.d/functions
   START_DAEMON=daemon
   STATUS=MStatus
   LOG_SUCCESS=RHSuccess

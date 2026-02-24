@@ -89,7 +89,7 @@ if [ "$SETUP" = "1" ];then
 
    apt-get -y install $REPREPO $DEVSCRIPTS $DEBHELPER $QUILT
 
-   echo "Finised setup for xcat-dep build. Rerun this script with SETUP=0 LOCAL_KEY=1 flags"
+   echo "Finished setup for xcat-dep build. Rerun this script with SETUP=0 LOCAL_KEY=1 flags"
    exit 1
 fi
 
@@ -267,10 +267,17 @@ then
             fi
             for target_arch in $target_archs
             do
+                tar_orig="${file_low}_${ver}.orig.tar.gz"
+                if grep -q "3.0 (quilt)" "${file}/debian/source/format" && [ ! -f "$tar_orig" ]; then
+                    tar czf "$tar_orig" --exclude debian -C "$file" .
+                fi
+
                 if grep -q $file $update_log || [ "$BUILDALL" == 1 -o "$file" = "perl-xCAT" ]; then
                     rm -f $PKGDIR/${file_low}_*.$target_arch.deb
                     cd $file
                     CURDIR=$(pwd)
+
+                    find . -name '*.dch' -delete
                     dch -v $pkg_version -b -c debian/changelog $build_string
                     if [ "$target_arch" = "all" ]; then
                         #xcat probe use some functions shipped by xCAT, for below reasons we need to copy files to xCAT-probe directory
