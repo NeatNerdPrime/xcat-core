@@ -78,7 +78,9 @@ if [[ ${ARCH} =~ ppc64 ]]; then
 elif [[ ${ARCH} =~ x86_64 ]]; then
     # load all network driver modules listed in /lib/modules/<kernel>/modules.dep file
     KERVER=`uname -r`
-    for line in `cat /lib/modules/$KERVER/modules.dep |grep -vE 'tunnel|ieee|ifb|bond|dummy|fjes|hv_netvsc|ntb_netdev|xen-netfront|hdlc_fr|dlci'| awk -F: '{print \$1}' | sed -e "s/\(.*\)\.ko.*/\1/"`; do
+    # Xen guests require xen-netfront for the paravirtual NIC.
+    modprobe xen-netfront 2>/dev/null || :
+    for line in `cat /lib/modules/$KERVER/modules.dep |grep -vE 'tunnel|ieee|ifb|bond|dummy|fjes|hv_netvsc|ntb_netdev|hdlc_fr|dlci'| awk -F: '{print \$1}' | sed -e "s/\(.*\)\.ko.*/\1/"`; do
         if [[ $line =~ "kernel/drivers/net" ]]; then
             modprobe `basename $line`
         fi

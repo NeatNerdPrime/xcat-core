@@ -21,6 +21,8 @@ sub install_deps {
     dnf install -y \$(/usr/lib/rpm/perl.req $0)
     dnf install -y tar mock nginx createrepo podman rpmdevtools
 
+    systemctl enable --now nginx
+
     rpmdev-setuptree
 EOF
     $? >> 8;
@@ -36,7 +38,7 @@ use Carp;
 use Cwd qw();
 use Data::Dumper;
 use File::Copy qw(cp);
-use File::Path qw(make_path);
+use File::Path qw(make_path remove_tree);
 use File::Slurper qw(read_text write_text);
 use FindBin qw($Bin);
 use Getopt::Long qw(GetOptions);
@@ -87,7 +89,6 @@ my %opts = (
     packages => \@PACKAGES,
     targets => \@TARGETS,
     verbose => 0,
-    setup_vhpc_repo => 0,
     xcat_dep_path => "$PWD/../xcat-dep/",
 );
 
@@ -101,7 +102,7 @@ GetOptions(
     "target=s@" => \$opts{targets},
     "verbose" => \$opts{verbose},
     "xcat_dep_path=s" => \$opts{xcat_dep_path},
-    "setup_vhpc_repo" => \$opts{setup_vhpc_repo},
+    "setup_local_repos" => \$opts{setup_local_repos},
 ) or usage();
 
 sub sh {
@@ -139,14 +140,39 @@ sub product {
     } @$a
 }
 
-sub setup_vhpc_repo {
-    write_text("/etc/yum.repos.d/VersatusHPC.repo", <<'EOF');
-[VersatusHPC]
-name=VersatusHPC
-baseurl=https://mirror.versatushpc.com.br/versatushpc/rpm/el10/
-gpgcheck=0
+sub os_release {
+    my %os;
+    open my $fh, '<', '/etc/os-release' or die "Cannot open /etc/os-release: $!";
+
+    while (<$fh>) {
+        chomp;
+        next if /^\s*#/ || !/=/;
+        my ($k, $v) = split /=/, $_, 2;
+        $v =~ s/^["'](.*)["']$/$1/;  # strip surrounding quotes
+        $os{$k} = $v;
+    }
+
+    return %os;   # usage: my %os = os_release();
+}
+
+sub setup_repo {
+    my (%opts) = @_;
+    my $id = $opts{-id} or confess "-id is required";
+    my $name = $opts{-name} // $id;
+    my $url = $opts{-baseurl} or confess "-url is required";
+    my $gpgkey = $opts{-gpgkey};
+    my $gpgcheck = $gpgkey ? 1 : 0 ;
+    my $gpgkey_line =
+            $gpgkey
+            ? "gpgkey=$gpgkey"
+            : "# gpgkey=";
+    write_text("/etc/yum.repos.d/$id.repo", <<"EOF");
+[$id]
+name=$name
+baseurl=$url
+$gpgkey_line
+gpgcheck=$gpgcheck
 EOF
-    system("dnf makecache --repoid=VersatusHPC");
     $? >> 0;
 }
 
@@ -238,6 +264,16 @@ cd $buildpath/fs
 zcat $genesispath.rfs | cpio -dumi
 EOF
 
+    # Ensure helper scripts remain executable in genesis rootfs.
+    # EL10 discovery needs dhclient-script to be executable.
+    for my $script (
+        "$buildpath/fs/sbin/dhclient-script",
+        "$buildpath/fs/usr/sbin/dhclient-script",
+        "$buildpath/fs/sbin/xcatroot",
+    ) {
+        chmod 0755, $script if -f $script;
+    }
+
     my @perl_lib_dir = qw(
         /usr/share/perl5
         /usr/lib64/perl5
@@ -260,8 +296,11 @@ EOF
     cp "$lib_udev_rules/80-net-name-slot.rules", "$buildpath/fs/lib/udev/rules.d/"
         if -e "$lib_udev_rules/80-net-name-slot.rules";
 
-    make_path("$buildpath/kernel/");
-    cp "/boot/vmlinuz-$kernelversion", "$buildpath/kernel/";
+    # Keep historical layout: kernel is a file, not a directory.
+    # mknb expects genesis/<arch>/kernel to be copied as a kernel file.
+    unlink "$buildpath/kernel" if -l "$buildpath/kernel" || -f "$buildpath/kernel";
+    remove_tree "$buildpath/kernel" if -d "$buildpath/kernel";
+    cp "/boot/vmlinuz-$kernelversion", "$buildpath/kernel";
 
     # Create the targz
     #
@@ -401,7 +440,27 @@ sub buildall {
 }
 
 sub configure_nginx {
-    my $xcat_dep_path = $opts{xcat_dep_path};
+    my %os = os_release();
+    my $version = $os{VERSION_ID};
+    my $xcat_dep_path;
+
+    if ($version > 10) {
+        setup_repo
+            -id => "VersatusHPC",
+            -baseurl => "https://mirror.versatushpc.com.br/versatushpc/rpm/el10/";
+        $xcat_dep_path = $opts{xcat_dep_path};
+        confess "Missing xcat-dep folder in $xcat_dep_path: No such file or directory"
+            unless -d $xcat_dep_path;
+    } elsif ($version =~ /^9/) {
+        $xcat_dep_path = "https://mirror.versatushpc.com.br/xcat/yum/xcat-dep/rh9/";
+    } elsif ($version =~ /^8/) {
+        $xcat_dep_path = "https://mirror.versatushpc.com.br/xcat/yum/xcat-dep/rh8/";
+    } else {
+        confess "Unexpected OS version $version";
+    }
+    confess "xcat-dep path still undef, this is likely to be a bug"
+        unless defined $xcat_dep_path;
+
     my $port = $opts{nginx_port};
     my $conf = <<"EOF";
 server {
@@ -436,6 +495,25 @@ EOF
     `systemctl restart nginx`;
     $? >> 8;
 }
+
+sub setup_local_repos {
+    my ($target) = @_;
+    $target //= $opts{targets}->[0]
+        or die "A target must be provided for setup_local_repos";
+    my $exit = setup_repo
+        -id => "xcat-core-local",
+        -baseurl => "http://127.0.0.1:$opts{nginx_port}/$target";
+    return $exit if $exit;
+    my %os = os_release();
+    my $version = int $os{VERSION_ID};
+    my $arch = `arch`;
+    chomp $arch;
+
+    $exit = setup_repo
+            -id => "xcat-dep",
+            -baseurl => "http://127.0.0.1:$opts{nginx_port}/xcat-dep/el$version/$arch";
+}
+
 
 sub update_repo {
     my ($target) = @_;
@@ -475,7 +553,7 @@ sub usage {
 sub main {
     return usage() if $opts{help};
     return exit(configure_nginx()) if $opts{configure_nginx};
-    return exit(setup_vhpc_repo()) if $opts{setup_vhpc_repo};
+    return exit(setup_local_repos()) if $opts{setup_local_repos};
 
     my @rpms = product($opts{packages}, $opts{targets});
     my $pm = Parallel::ForkManager->new($opts{nproc});
@@ -501,7 +579,8 @@ sub main {
     $pm->wait_all_children;
 
     configure_nginx();
-
+    setup_local_repos();
+    exit(0);
 }
 
 main();

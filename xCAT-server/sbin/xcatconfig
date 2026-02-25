@@ -2014,6 +2014,9 @@ sub mknb
     }
     if ($run_mknb) {
         foreach (qw(ppc64 x86_64)) {
+            # @FIXME: Disabled as part of genesis-base testing operation, I do not
+            #   have genesis-base for ppc, yet. Remove this line after testing
+            next if /^ppc/;
             system("$cmd $_");
             if ($? != 0) {
                 my $rc = $? >> 8;

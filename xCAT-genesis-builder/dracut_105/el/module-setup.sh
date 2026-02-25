@@ -622,7 +622,8 @@ install() {
     dracut_install /usr/share/zoneinfo/posix/Chile/Continental
     inst "$moddir/xcatroot" "/sbin/xcatroot"
     inst "$moddir/dhclient.conf" "/etc/dhclient.conf"
-    inst "$moddir/dhclient-script" "/sbin/dhclient-script"
+    # dhclient executes this helper, so it must stay executable in initramfs.
+    inst_script "$moddir/dhclient-script" "/sbin/dhclient-script"
     inst "$moddir/rsyslog.conf" "/etc/rsyslog.conf"
     dracut_install chronyc chronyd rpcbind systemd-tmpfiles
     dracut_install /etc/ssh
