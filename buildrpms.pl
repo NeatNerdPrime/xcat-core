@@ -57,6 +57,30 @@ chomp($VERSION);
 chomp($RELEASE);
 chomp($GITINFO);
 
+sub os_release {
+    my %os;
+    open my $fh, '<', '/etc/os-release' or die "Cannot open /etc/os-release: $!";
+
+    while (<$fh>) {
+        chomp;
+        next if /^\s*#/ || !/=/;
+        my ($k, $v) = split /=/, $_, 2;
+        $v =~ s/^["'](.*)["']$/$1/;  # strip surrounding quotes
+        $os{$k} = $v;
+    }
+
+    return %os;   # usage: my %os = os_release();
+}
+
+sub arch {
+    my $arch = `uname -m`;
+    chomp $arch;
+    return $arch;
+}
+
+my $ARCH = arch();
+my %OS = os_release();
+my $DISTRO = $OS{ID};
 
 my @PACKAGES = qw(
     perl-xCAT
@@ -74,10 +98,11 @@ my @PACKAGES = qw(
     xCAT-vlan
 );
 
-my @TARGETS = qw(
-    rhel+epel-8-x86_64
-    rhel+epel-9-x86_64
-    rhel+epel-10-x86_64);
+my @TARGETS = (
+    "$DISTRO+epel-8-$ARCH",
+    "$DISTRO+epel-9-$ARCH",
+    "$DISTRO+epel-10-$ARCH",
+);
 
 
 my %opts = (
@@ -138,21 +163,6 @@ sub product {
         my $x = $_;
         map [ $x, $_ ], @$b;
     } @$a
-}
-
-sub os_release {
-    my %os;
-    open my $fh, '<', '/etc/os-release' or die "Cannot open /etc/os-release: $!";
-
-    while (<$fh>) {
-        chomp;
-        next if /^\s*#/ || !/=/;
-        my ($k, $v) = split /=/, $_, 2;
-        $v =~ s/^["'](.*)["']$/$1/;  # strip surrounding quotes
-        $os{$k} = $v;
-    }
-
-    return %os;   # usage: my %os = os_release();
 }
 
 sub setup_repo {
@@ -223,9 +233,8 @@ sub buildsources_genesis_base() {
 
     my $dracutmoddir = "/usr/lib/dracut/modules.d/97xcat/";
 
-    my $buildarch = `uname -m`;
+    my $buildarch = $ARCH;
     my $kernelversion = `uname -r`;
-    chomp $buildarch;
     chomp $kernelversion;
 
     my $genesispath = "/tmp/xcatgenesis.$$";
@@ -397,9 +406,7 @@ sub buildpkgs {
     my $targetarch = (split /-/, $target, 3)[2];
 
     # get the builder arch, xCAT-genesis-base include it in its package name
-    my $nativearch = `uname -m`;
-    chomp $nativearch;
-    $nativearch = "ppc64" if $nativearch =~ /^ppc/;
+    my $nativearch = $ARCH;
     my $arch = is_in($pkg, @native_pkgs) ? $targetarch : "noarch";
 
     my $diskcache = "dist/$target/rpms/$pkg-$VERSION-$RELEASE.$arch.rpm";
@@ -506,8 +513,7 @@ sub setup_local_repos {
     return $exit if $exit;
     my %os = os_release();
     my $version = int $os{VERSION_ID};
-    my $arch = `arch`;
-    chomp $arch;
+    my $arch = $ARCH;
 
     $exit = setup_repo
             -id => "xcat-dep",
