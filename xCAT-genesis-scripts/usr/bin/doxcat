@@ -6,6 +6,46 @@
 #
 log_label="xcat.genesis.doxcat"
 
+# Normalize interface names from "ip link" output by removing decorations
+# like "@if3", trailing ":" and surrounding whitespace.
+normalize_ifname() {
+    echo "$1" | sed -e 's/@.*$//' -e 's/:$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
+# Only consider real ethernet NICs for link probing and DHCP.
+# This skips virtual/tunnel interfaces that can spam netlink errors.
+is_candidate_nic() {
+    local nic="$1"
+
+    [ -n "$nic" ] || return 1
+    [ "$nic" = "lo" ] && return 1
+    case "$nic" in
+        usb*) return 1 ;;
+    esac
+    [ -d "/sys/class/net/$nic" ] || return 1
+    [ -e "/sys/class/net/$nic/device" ] || return 1
+    [ "$(cat "/sys/class/net/$nic/type" 2>/dev/null)" = "1" ] || return 1
+
+    return 0
+}
+
+list_candidate_nics() {
+    local only_up="$1"
+    local rawnic
+    local nic
+
+    ip -o link show | awk -F': ' '{print $2}' | while read -r rawnic; do
+        nic=$(normalize_ifname "$rawnic")
+        if ! is_candidate_nic "$nic"; then
+            continue
+        fi
+        if [ "$only_up" = "up" ]; then
+            ip -o link show dev "$nic" 2>/dev/null | grep -q "UP" || continue
+        fi
+        echo "$nic"
+    done
+}
+
 # Start rsyslogd and log into a local file specified in /etc/rsyslog.conf
 # Later, once xCAT MN is known, dhclient-script will change
 # rsyslog.conf file to send log entries to xCAT MN
@@ -40,11 +80,16 @@ if ls /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor &>/dev/null; then
     fi
 fi
 if [ ! -z "$BOOTIF" ]; then
-	BOOTIF=`echo $BOOTIF|sed -e s/01-// -e s/-/:/g`
+	BOOTIF=`echo "$BOOTIF"|sed -e s/01-// -e s/-/:/g`
 	logger -s -t $log_label -p local4.info "Waiting for device with address $BOOTIF to appear.."
 	gripeiter=6000
 	while [ -z "$bootnic" ]; do
-		bootnic=`ip link show|grep -B1 $BOOTIF|grep mtu|awk '{print $2}'|sed -e 's/:$//'`
+		bootnic=`ip -o link show | awk -v mac="$BOOTIF" 'tolower($0) ~ tolower(mac) {print $2; exit}'`
+		bootnic=`normalize_ifname "$bootnic"`
+		if [ ! -z "$bootnic" ] && ! ip link show dev "$bootnic" >/dev/null 2>&1; then
+			logger -s -t $log_label -p local4.info "Detected boot nic '$bootnic' from BOOTIF=$BOOTIF, but the interface does not exist yet. Retrying..."
+			bootnic=""
+		fi
 		sleep 0.1
 		if [ $gripeiter = 0 ]; then
 			logger -s -t $log_label -p local4.err "Unable to find boot device (Maybe the xCAT genesis kernel is missing the driver for your NIC?)"
@@ -108,7 +153,7 @@ logger -s -t $log_label -p local4.info "Creating /var/lib/lldpad file..."
 mkdir -p /var/lib/lldpad
 echo 'lldp :' >> /var/lib/lldpad/lldpad.conf
 echo '{' >> /var/lib/lldpad/lldpad.conf
-for iface in `ip link |grep -v '^ '|awk '{print $2}'|sed -e 's/:$//'|grep -v lo`; do
+for iface in `ip -o link show | awk -F': ' '{print $2}' | sed -e 's/@.*$//' -e 's/:$//' | grep -v '^lo$'`; do
 echo "$iface :" >> /var/lib/lldpad/lldpad.conf
 echo "{" >> /var/lib/lldpad/lldpad.conf
 	echo  "tlvid00000006 :" >> /var/lib/lldpad/lldpad.conf
@@ -205,14 +250,14 @@ if [[ -n $hostip && -n $netmask && -n $gateway && -n $bootnic ]]; then
 else
 	logger -s -t $log_label -p local4.info "Setting IP via DHCP..."
         # This section is for System P hardware discovery, which won't have a BOOTIF value set
-        if [ -z "$bootnic" ]; then
-            tries=0
-            while [ $tries -lt 100 ]; do
-                ALLUP_NICS=`ip link show | grep -v "^ " | grep "state UP" | awk '{print $2}' | sed -e 's/:$//'|grep -v lo | sort -n -r`
-                for tmp1 in $ALLUP_NICS; do
-                    dhclient -cf /etc/dhclient.conf -pf /var/run/dhclient.$tmp1.pid $tmp1 &
-                    dhclient -6 -pf /var/run/dhclient6.$tmp1.pid $tmp1 -lf /var/lib/dhclient/dhclient6.leases &
-                    #bootnic=$tmp1
+	        if [ -z "$bootnic" ]; then
+	            tries=0
+	            while [ $tries -lt 100 ]; do
+                ALLUP_NICS=`list_candidate_nics up | sort -r`
+	                for tmp1 in $ALLUP_NICS; do
+	                    dhclient -cf /etc/dhclient.conf -pf /var/run/dhclient.$tmp1.pid $tmp1 &
+	                    dhclient -6 -pf /var/run/dhclient6.$tmp1.pid $tmp1 -lf /var/lib/dhclient/dhclient6.leases &
+	                    #bootnic=$tmp1
                     #break
                 done
                 if [ ! -z "$ALLUP_NICS" ]; then
@@ -247,25 +292,25 @@ else
                 /bin/bash
             fi
         else
-	    dhclient -cf /etc/dhclient.conf -pf /var/run/dhclient.$bootnic.pid $bootnic &
-	    #we'll kick of IPv6 and IPv4 on all nics, but not wait for them to come up unless doing discovery, to reduce
-	    #chances that we'll perform a partial discovery
-	    #in other scenarios where downed non-bootnics cause issues, will rely on retries to fix things up
-	    dhclient -6 -pf /var/run/dhclient6.$bootnic.pid $bootnic -lf /var/lib/dhclient/dhclient6.leases &
-	    NICSTOBRINGUP=`ip link|grep mtu|grep -v LOOPBACK|grep -v $bootnic|grep -v usb|grep -v ,UP|awk -F: '{print $2}'`
-	    export NICSTOBRINGUP
-	    for nic in $NICSTOBRINGUP; do
-		(while ! ethtool $nic | grep Link\ detected|grep yes > /dev/null; do sleep 5; done; dhclient -cf /etc/dhclient.conf -pf /var/run/dhclient.$nic.pid $nic ) &
-		(while ! ethtool $nic | grep Link\ detected|grep yes > /dev/null; do sleep 5; done; dhclient -cf /etc/dhclient.conf -6 -pf /var/run/dhclient6.$nic.pid -lf /var/lib/dhclient/dhclient6.leases $nic ) &
-	    done
+		    dhclient -cf /etc/dhclient.conf -pf /var/run/dhclient.$bootnic.pid "$bootnic" &
+		    #we'll kick of IPv6 and IPv4 on all nics, but not wait for them to come up unless doing discovery, to reduce
+		    #chances that we'll perform a partial discovery
+		    #in other scenarios where downed non-bootnics cause issues, will rely on retries to fix things up
+		    dhclient -6 -pf /var/run/dhclient6.$bootnic.pid "$bootnic" -lf /var/lib/dhclient/dhclient6.leases &
+		    NICSTOBRINGUP=`list_candidate_nics | awk -v bootnic="$bootnic" '$0 != bootnic'`
+		    export NICSTOBRINGUP
+		    for nic in $NICSTOBRINGUP; do
+			(while ! ethtool "$nic" | grep Link\ detected|grep yes > /dev/null; do sleep 5; done; dhclient -cf /etc/dhclient.conf -pf /var/run/dhclient.$nic.pid "$nic" ) &
+			(while ! ethtool "$nic" | grep Link\ detected|grep yes > /dev/null; do sleep 5; done; dhclient -cf /etc/dhclient.conf -6 -pf /var/run/dhclient6.$nic.pid -lf /var/lib/dhclient/dhclient6.leases "$nic" ) &
+		    done
 
             gripeiter=101
             logger -s -t $log_label -p local4.info "Acquiring network addresses.."
-            while ! ip -4 -o a show dev $bootnic|grep -v 'scope link'|grep -q inet; do
-                sleep 0.1
-                if [ $gripeiter = 1 ]; then
-                    logger -s -t $log_label -p local4.info "It seems to be taking a while to acquire an IPv4 address, you may want to check spanning tree..."
-                fi
+	            while ! ip -4 -o a show dev "$bootnic"|grep -v 'scope link'|grep -q inet; do
+	                sleep 0.1
+	                if [ $gripeiter = 1 ]; then
+	                    logger -s -t $log_label -p local4.info "It seems to be taking a while to acquire an IPv4 address, you may want to check spanning tree..."
+	                fi
                 gripeiter=$((gripeiter-1))
             done
         fi
@@ -275,7 +320,7 @@ openssl genrsa -out /etc/xcat/certkey.pem 4096 > /dev/null 2>&1 &
 
 logger -s -t $log_label -p local4.info "Acquired IPv4 address on $bootnic"
 
-ip -4 -o a show dev $bootnic|grep -v 'scope link'|grep -v 'dynamic'|awk '{print $4}'
+ip -4 -o a show dev "$bootnic"|grep -v 'scope link'|grep -v 'dynamic'|awk '{print $4}'
 
 if [ -e /usr/sbin/ntpd ]; then
     logger -s -t $log_label -p local4.info "Starting ntpd..."

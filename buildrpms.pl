@@ -156,6 +156,22 @@ sub is_in {
     0;
 }
 
+sub genesis_tarch_from_targetarch {
+    my ($targetarch) = @_;
+    return 'ppc64' if $targetarch eq 'ppc64le';
+    return 'x86' if $targetarch =~ /^i[3-6]86$/;
+    return $targetarch;
+}
+
+sub targetarch_from_target {
+    my ($target) = @_;
+    return $ARCH unless defined $target && length $target;
+    my @parts = split /-/, $target;
+    my $arch = $parts[-1];
+    $arch =~ s/^\s+|\s+$//g;
+    return lc $arch;
+}
+
 # product(\@A, \@B) returns the catersian product of \@A and \@B
 sub product {
     my ($a, $b) = @_;
@@ -202,7 +218,9 @@ sub createmockconfig {
     write_text($cfgfile, $contents);
 }
 
-sub buildsources_genesis_base() {
+sub buildsources_genesis_base($) {
+    my ($target) = @_;
+
     die "Assertion failed! No directory xCAT-genesis-builder in the current directory"
         unless -d "./xCAT-genesis-builder";
 
@@ -233,7 +251,8 @@ sub buildsources_genesis_base() {
 
     my $dracutmoddir = "/usr/lib/dracut/modules.d/97xcat/";
 
-    my $buildarch = $ARCH;
+    my $targetarch = targetarch_from_target($target);
+    my $buildarch = genesis_tarch_from_targetarch($targetarch);
     my $kernelversion = `uname -r`;
     chomp $kernelversion;
 
@@ -353,7 +372,18 @@ EOF
     } elsif ($pkg eq "xCAT-genesis-scripts") {
       sh qq(tar -cjf "$SOURCES/$pkg.tar.bz2" $pkg);
     } elsif ($pkg eq "xCAT-genesis-base") {
-        buildsources_genesis_base();
+        buildsources_genesis_base($target);
+    } elsif ($pkg eq "xCATsn") {
+      sh(<<"EOF");
+          tar -czf "$SOURCES/$pkg-$VERSION.tar.gz" $pkg
+          tar -czf "$SOURCES/license.tar.gz" -C $pkg LICENSE.html
+          tar -czf "$SOURCES/etc.tar.gz" -C xCAT etc
+          cp $pkg/xcat.conf $SOURCES
+          cp $pkg/xcat.conf.apach24 $SOURCES
+          cp $pkg/xCATSN $SOURCES
+EOF
+      # xCATsn.spec consumes templates from xCAT shared templates payload.
+      sh qq(tar -czf "$SOURCES/templates.tar.gz" xCAT/templates) unless -f "$SOURCES/templates.tar.gz";
     } else {
       sh qq(tar -czf "$SOURCES/$pkg-$VERSION.tar.gz" $pkg);
     }
@@ -363,8 +393,13 @@ sub buildspkgs {
     my ($pkg, $target) = @_;
 
     my $chroot = "$pkg-$target";
+    my $targetarch = targetarch_from_target($target);
+    my $genesis_tarch = genesis_tarch_from_targetarch($targetarch);
 
-    my $diskcache = "dist/$target/srpms/$pkg-$VERSION-$RELEASE.src.rpm";
+    my $diskcache = (
+        $pkg eq 'xCAT-genesis-scripts' || $pkg eq 'xCAT-genesis-base'
+    ) ? "dist/$target/srpms/$pkg-$genesis_tarch-$VERSION-$RELEASE.src.rpm"
+      : "dist/$target/srpms/$pkg-$VERSION-$RELEASE.src.rpm";
     return if -f $diskcache and not $opts{force};
 
     my $dir = sub {
@@ -403,22 +438,25 @@ sub buildpkgs {
     );
 
     # get x86_64 from rhel+epel-9-x86_64
-    my $targetarch = (split /-/, $target, 3)[2];
+    my $targetarch = targetarch_from_target($target);
 
-    # get the builder arch, xCAT-genesis-base include it in its package name
-    my $nativearch = $ARCH;
+    # xCAT genesis packages include the translated target arch in their file names.
     my $arch = is_in($pkg, @native_pkgs) ? $targetarch : "noarch";
 
-    my $diskcache = "dist/$target/rpms/$pkg-$VERSION-$RELEASE.$arch.rpm";
+    my $genesis_tarch = genesis_tarch_from_targetarch($targetarch);
+    my $diskcache = (
+        $pkg eq 'xCAT-genesis-scripts' || $pkg eq 'xCAT-genesis-base'
+    ) ? "dist/$target/rpms/$pkg-$genesis_tarch-$VERSION-$RELEASE.noarch.rpm"
+      : "dist/$target/rpms/$pkg-$VERSION-$RELEASE.$arch.rpm";
     return if -f $diskcache and not $opts{force};
 
     my @opts;
     push @opts, "--quiet" unless $opts{verbose};
 
     my $spkgname = sub {
-        return "${pkg}-${arch}-${VERSION}-${RELEASE}.src.rpm"
+        return "${pkg}-${genesis_tarch}-${VERSION}-${RELEASE}.src.rpm"
             if $pkg eq 'xCAT-genesis-scripts';
-        return "xCAT-genesis-base-${nativearch}-${VERSION}-${RELEASE}.src.rpm"
+        return "xCAT-genesis-base-${genesis_tarch}-${VERSION}-${RELEASE}.src.rpm"
             if $pkg eq 'xCAT-genesis-base';
 
         return "$pkg-${VERSION}-${RELEASE}.src.rpm";

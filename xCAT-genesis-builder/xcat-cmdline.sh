@@ -64,7 +64,7 @@ if [[ ${ARCH} =~ ppc64 ]]; then
         modprobe virtio_pci
     fi
     waittime=2
-    ALL_NICS=$(ip link show | grep -v "^ " | awk '{print $2}' | sed -e 's/:$//' | grep -v lo)
+    ALL_NICS=$(ip -o link show | awk -F': ' '{print $2}' | sed -e 's/@.*$//' -e 's/:$//' | grep -v '^lo$' | sort -u)
     for tmp in $ALL_NICS; do
         tmp_data="$(ip link show "$tmp" | grep -v "^ " | grep "UP")"
         if [ "$tmp_data" == "" ]; then

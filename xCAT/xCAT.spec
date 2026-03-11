@@ -74,20 +74,13 @@ Requires: elilo-xcat xnba-undi
 %endif
 
 %ifarch i386 i586 i686 x86 x86_64
-Requires: syslinux
+Requires: syslinux-xcat
 Requires: ipmitool-xcat >= 1.8.17-1
 %endif
 
 %ifos linux
 %ifarch ppc ppc64 ppc64le
 Requires: ipmitool-xcat >= 1.8.17-1
-%endif
-%endif
-
-%if %notpcm
-# PCM does not need or ship syslinux-xcat
-%if %nots390x
-Requires: syslinux-xcat
 %endif
 %endif
 
