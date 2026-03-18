@@ -43,6 +43,7 @@ use File::Slurper qw(read_text write_text);
 use FindBin qw($Bin);
 use Getopt::Long qw(GetOptions);
 use Parallel::ForkManager;
+use Pod::Usage qw(pod2usage);
 
 use autodie;
 use autodie qw(cp);
@@ -112,6 +113,7 @@ my %opts = (
     nginx_port => 8080,
     nproc => int(`nproc --all`),
     packages => \@PACKAGES,
+    repo_mode => "file",
     targets => \@TARGETS,
     verbose => 0,
     xcat_dep_path => "$PWD/../xcat-dep/",
@@ -124,11 +126,24 @@ GetOptions(
     "nginx_port" => \$opts{nginx_port},
     "nproc=i" => \$opts{nproc},
     "package=s@" => \$opts{packages},
+    "repo-mode=s" => \$opts{repo_mode},
     "target=s@" => \$opts{targets},
     "verbose" => \$opts{verbose},
     "xcat_dep_path=s" => \$opts{xcat_dep_path},
     "setup_local_repos" => \$opts{setup_local_repos},
 ) or usage();
+
+sub usage {
+    my (%args) = @_;
+    my $verbose = $args{verbose} // 1;
+    my $exitval = $args{exitval} // 2;
+    my $message = $args{message};
+    pod2usage(
+        -verbose => $verbose,
+        -exitval => $exitval,
+        (defined($message) && length($message) ? (-message => "$message\n") : ()),
+    );
+}
 
 sub sh {
     my ($cmd) = @_;
@@ -541,21 +556,49 @@ EOF
     $? >> 8;
 }
 
+sub repo_mode {
+    my $mode = lc($opts{repo_mode} // "file");
+    return $mode;
+}
+
+sub xcat_dep_file_repo_baseurl {
+    my ($version, $arch) = @_;
+    my $xcat_dep_path = $opts{xcat_dep_path};
+    confess "Missing xcat-dep path: --xcat_dep_path is empty"
+        unless defined $xcat_dep_path && length $xcat_dep_path;
+    $xcat_dep_path =~ s{/+$}{};
+    my $repo_path = "$xcat_dep_path/el$version/$arch";
+    confess "Missing xcat-dep repository path in $repo_path: No such directory"
+        unless -d $repo_path;
+    return "file://$repo_path";
+}
+
 sub setup_local_repos {
     my ($target) = @_;
     $target //= $opts{targets}->[0]
         or die "A target must be provided for setup_local_repos";
+    my $mode = repo_mode();
+    my $core_baseurl = (
+        $mode eq "file"
+        ? "file://$PWD/dist/$target/rpms"
+        : "http://127.0.0.1:$opts{nginx_port}/$target"
+    );
     my $exit = setup_repo
         -id => "xcat-core-local",
-        -baseurl => "http://127.0.0.1:$opts{nginx_port}/$target";
+        -baseurl => $core_baseurl;
     return $exit if $exit;
     my %os = os_release();
     my $version = int $os{VERSION_ID};
     my $arch = $ARCH;
+    my $xcat_dep_baseurl = (
+        $mode eq "file"
+        ? xcat_dep_file_repo_baseurl($version, $arch)
+        : "http://127.0.0.1:$opts{nginx_port}/xcat-dep/el$version/$arch"
+    );
 
     $exit = setup_repo
             -id => "xcat-dep",
-            -baseurl => "http://127.0.0.1:$opts{nginx_port}/xcat-dep/el$version/$arch";
+            -baseurl => $xcat_dep_baseurl;
 }
 
 
@@ -567,35 +610,12 @@ sub update_repo {
 }
 
 
-sub usage {
-    my ($errmsg) = @_;
-    say STDERR "Usage: $0 [--package=<pkg1>] [--target=<tgt1>] [--package=<pgk2>] [--target=<tgt2>] ...";
-    say STDERR "";
-    say STDERR "  RPM builder script";
-    say STDERR "     .. build xCAT RPMs for these targets:";
-    say STDERR map { "     $_\n" } @TARGETS;
-    say STDERR "";
-    say STDERR " Options:";
-    say STDERR "";
-    say STDERR "  --target <tgt> .................. build only these targets";
-    say STDERR "  --package <pkg> ................. build only these packages";
-    say STDERR "  --force ......................... override built RPMS";
-    say STDERR "  --configure_nginx ............... update nginx configuration";
-    say STDERR "  --nginx_port=8080 ............... change the nginx port in";
-    say STDERR "                                 (use with --configure_nginx)";
-    say STDERR "  --nproc <N> ..................... run up to N jobs in parallel";
-    say STDERR "  --xcat_dep_path=../xcat-dep ..... path to xcat-dep repositories";
-    say STDERR "";
-    say STDERR " If no --target or --package is given all combinations are built";
-    say STDERR "";
-    say STDERR " See test/README.md for more information";
-
-    say STDERR $errmsg if $errmsg;
-    exit -1;
-}
-
 sub main {
-    return usage() if $opts{help};
+    usage(verbose => 2, exitval => 0) if $opts{help};
+    my $mode = repo_mode();
+    return usage(message => "Invalid --repo-mode '$opts{repo_mode}'. Allowed values: file, http")
+        unless $mode eq "file" || $mode eq "http";
+
     return exit(configure_nginx()) if $opts{configure_nginx};
     return exit(setup_local_repos()) if $opts{setup_local_repos};
 
@@ -622,8 +642,8 @@ sub main {
     }
     $pm->wait_all_children;
 
-    configure_nginx();
-    setup_local_repos();
+    # Default run builds artifacts only.
+    # Repo setup/nginx configuration are explicit actions.
     exit(0);
 }
 
@@ -631,15 +651,121 @@ main();
 
 __END__;
 
+=head1 NAME
+
+buildrpms.pl - Build xCAT RPM packages with mock
+
 =head1 SYNOPSIS
 
-Build all xCAT RPM packages in parallel using mock for isolation
+  perl buildrpms.pl [options]
+
+=head1 DESCRIPTION
+
+Build xCAT packages (SRPM and RPM) for one or more targets using mock.
+By default, this script only performs package builds and repository metadata
+updates under C<dist/>. It does not configure nginx or yum repositories unless
+explicitly requested.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<--help>
+
+Show usage text and exit.
+
+=item B<--install_deps>
+
+Install host build dependencies, mock, nginx, and supporting tools.
+This option is handled before normal option parsing.
+
+=item B<--target>=I<TARGET>
+
+Build for the specified target. Repeatable. Example:
+C<rocky+epel-10-ppc64le>.
+
+=item B<--package>=I<PACKAGE>
+
+Build only selected package(s). Repeatable.
+
+=item B<--nproc>=I<N>
+
+Number of parallel workers used by C<Parallel::ForkManager>.
+Default: all host CPUs.
+
+=item B<--force>
+
+Rebuild artifacts even if output files already exist.
+
+=item B<--verbose>
+
+Print executed shell commands.
+
+=item B<--xcat_dep_path>=I<PATH>
+
+Path to the local C<xcat-dep> tree. Default: C<../xcat-dep/>.
+Used by nginx configuration and file-based repo setup.
+
+=item B<--repo-mode>=I<file|http>
+
+Repository mode used by C<--setup_local_repos>. Default: C<file>.
+
+C<file>:
+configure C<xcat-core-local> and C<xcat-dep> using C<file://> URLs.
+No nginx configuration is required.
+
+C<http>:
+configure local repos as C<http://127.0.0.1:E<lt>nginx_portE<gt>/...>.
+Use C<--configure_nginx> to generate and apply nginx configuration first.
+
+=item B<--configure_nginx>
+
+Generate C</etc/nginx/conf.d/xcat-repos.conf> and restart nginx.
+This is an explicit action and does not run during the default build flow.
+
+=item B<--nginx_port>=I<PORT>
+
+nginx listen port used by C<--configure_nginx> and C<--repo-mode=http>.
+Default: C<8080>.
+
+=item B<--setup_local_repos>
+
+Write C</etc/yum.repos.d/xcat-core-local.repo> and
+C</etc/yum.repos.d/xcat-dep.repo> for the selected mode.
+This is an explicit action and does not run during the default build flow.
+
+=back
+
+=head1 DEFAULT FLOW
+
+When no explicit repo/nginx options are passed, the script:
+
+=over 4
+
+=item 1.
+
+Builds all selected package/target combinations.
+
+=item 2.
+
+Runs C<createrepo --update> for each selected target under C<dist/>.
+
+=item 3.
+
+Exits without modifying nginx or yum repo files.
+
+=back
 
 =head1 KNOWN ERRORS
 
 =over 4
 
-    1. Error    : GPG error during mock cache creation/update
-       Cause    : Out-dated distribution-gpg-keys in host machine
-       Solution : Run `dnf update -y distribution-gpg-keys` in the host.
+=item 1.
+
+Error: GPG error during mock cache creation/update.
+
+Cause: out-dated C<distribution-gpg-keys> on the host machine.
+
+Solution: run C<dnf update -y distribution-gpg-keys> on the host.
+
 =back
