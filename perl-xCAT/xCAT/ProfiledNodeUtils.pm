@@ -1497,20 +1497,15 @@ sub get_netboot_attr {
     # It's sequence sensitive: os arch -> os name -> os major version -> hardware profile
     # Priority |  Arch       | OS Name | OS Major Version | Management method | Noderes.netboot  |
     # 1        |  x86_64/x86 | *       | *                | *                 | xnba             |
-    # 2        |  ppc64      | rhels   | 7                | *                 | grub2            |
     # 2        |  ppc64      | pkvm    | *                | *                 | petitboot        |
-    # 3        |             | *       | *                | *                 | yaboot           |
+    # 3        |  ppc64      | *       | *                | *                 | grub2            |
     # 4        |  ppc64le/el | *       | *                | *                 | grub2
     # 4        |  ppc64le/el | *       | *                | ipmi              | petitboot
     #          arch          osname       version  hardware           netboot
     my %netboot_dict = ('x86_64' => 'xnba',
         'ppc64' => {
-            'rhels' => {
-                '7' => 'grub2',
-                '*' => 'yaboot',
-            },
             'pkvm' => 'petitboot',
-            '*'    => 'yaboot',
+            '*'    => 'grub2',
         },
         'ppc64le' => {
             '*' => {

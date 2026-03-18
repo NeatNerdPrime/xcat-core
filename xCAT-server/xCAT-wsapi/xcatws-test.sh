@@ -158,7 +158,7 @@ RESTMSG="Display the node restapinode1"
 REST GET "/nodes/restapinode1"
 
 RESTMSG="Change the attributes for node restapinode1"
-REST PUT "/nodes/restapinode1" '{"mgt":"fsp","netboot":"yaboot"}'
+REST PUT "/nodes/restapinode1" '{"mgt":"hmc","netboot":"grub2"}'
 
 RESTMSG="Display the node restapinode1"
 REST GET "/nodes/restapinode1"
@@ -194,4 +194,3 @@ REST GET "/groups/restapi"
 
 RESTMSG="Display the nodes in group restapi"
 REST GET "/nodes/restapi"
-

@@ -2750,8 +2750,8 @@ sub addnet
           "    } else if substring (option vendor-class-identifier,0,11) = \"onie_vendor\" { #for onie on cumulus switch\n";
         push @netent, "        option www-server = \"http://$tftp:$httpport/install/onie/onie-installer\";\n";
         push @netent,
-          "    } else if substring(filename,0,1) = null { #otherwise, provide yaboot if the client isn't specific\n ";
-        push @netent, "        filename \"/yaboot\";\n";
+          "    } else if substring(filename,0,1) = null { #otherwise, provide grub2 for PPC firmware that omits a client architecture\n ";
+        push @netent, "        filename \"/boot/grub2/grub2.ppc\";\n";
         push @netent, "    }\n";
 
         if ($range) {
