@@ -21,8 +21,20 @@ Requires: perl-DBD-SQLite
 Requires: xCAT-client = 4:%{version}-%{release}
 Requires: xCAT-server = 4:%{version}-%{release}
 Requires: xCAT-probe  = 4:%{version}-%{release}
+
+# Match xCAT-genesis-scripts package naming by build architecture.
+%ifarch i386 i586 i686 x86
+Requires: xCAT-genesis-scripts-x86 = 1:%{version}-%{release}
+%endif
+%ifarch x86_64
 Requires: xCAT-genesis-scripts-x86_64 = 1:%{version}-%{release}
-Requires: xCAT-genesis-scripts-ppc64  = 1:%{version}-%{release}
+%endif
+%ifarch ppc ppc64 ppc64le
+Requires: xCAT-genesis-scripts-ppc64 = 1:%{version}-%{release}
+%endif
+%ifarch aarch64
+Requires: xCAT-genesis-scripts-aarch64 = 1:%{version}-%{release}
+%endif
 
 Conflicts: xCAT
 
@@ -53,10 +65,11 @@ Requires: goconserver >= 0.3.3
 
 #support mixed cluster
 %ifnarch s390x
-Requires: elilo-xcat xnba-undi
+Requires: elilo-xcat
 %endif
 
 %ifarch i386 i586 i686 x86 x86_64
+Requires: xnba-undi
 Requires: syslinux-xcat
 Requires: ipmitool-xcat >= 1.8.17-1
 %endif

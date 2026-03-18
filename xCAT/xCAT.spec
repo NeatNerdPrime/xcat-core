@@ -35,14 +35,26 @@ Requires: xCAT-server = 4:%{version}-%{release}
 %define s390x %(if [ "$s390x" = "1" ];then echo 1; else echo 0; fi)
 %define nots390x %(if [ "$s390x" = "1" ];then echo 0; else echo 1; fi)
 
+# Match xCAT-genesis-scripts package naming by build architecture.
+%ifarch i386 i586 i686 x86
+%define genesistarch x86
+%endif
+%ifarch x86_64
+%define genesistarch x86_64
+%endif
+%ifarch ppc ppc64 ppc64le
+%define genesistarch ppc64
+%endif
+%ifarch aarch64
+%define genesistarch aarch64
+%endif
+
 # Define a different location for various httpd configs in s390x mode
 %define httpconfigdir %(if [ "$s390x" = "1" ];then echo "xcathttpdsave"; else echo "xcat"; fi)
 
 %if %nots390x
 Requires: xCAT-probe  = 4:%{version}-%{release}
-Requires: xCAT-genesis-scripts-x86_64 = 1:%{version}-%{release}
-# Disabling temporary for testing in x86_64, no ppc build yet
-# Requires: xCAT-genesis-scripts-ppc64  = 1:%{version}-%{release}
+Requires: xCAT-genesis-scripts-%{genesistarch} = 1:%{version}-%{release}
 %endif
 
 Requires: rsync
@@ -70,10 +82,11 @@ Requires: goconserver >= 0.3.3
 
 #support mixed cluster
 %if %nots390x
-Requires: elilo-xcat xnba-undi
+Requires: elilo-xcat
 %endif
 
 %ifarch i386 i586 i686 x86 x86_64
+Requires: xnba-undi
 Requires: syslinux-xcat
 Requires: ipmitool-xcat >= 1.8.17-1
 %endif
