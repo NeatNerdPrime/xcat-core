@@ -234,8 +234,8 @@ sub process_request {
             $nrtab->setNodeAttribs($node, { netboot => 'xnba' });
         } elsif ($request->{arch}->[0] =~ /ppc/ and $request->{platform}->[0] =~ /PowerNV/) {
             $nrtab->setNodeAttribs($node, { netboot => 'petitboot' });
-        } elsif ($request->{arch}->[0] =~ /ppc/ and $currboot !~ /^grub2(?:[-].*)?$/) {
-            $nrtab->setNodeAttribs($node, { netboot => 'grub2' });
+        } elsif ($request->{arch}->[0] =~ /ppc/ and $currboot !~ /yaboot/) {
+            $nrtab->setNodeAttribs($node, { netboot => 'yaboot' });
         } elsif($request->{arch}->[0] =~ /armv7l/ and $currboot !~ /onie/) {
             #for onie switch, the netboot should be "onie"
             $nrtab->setNodeAttribs($node, { netboot => 'onie' });

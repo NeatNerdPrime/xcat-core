@@ -83,7 +83,7 @@ my %URIdef = (
             PUT => {
                 desc => "Change the attributes for the node {noderange}.",
                 usage => "|$usagemsg{objchparam} DataBody: {attr1:v1,att2:v2,...}.|$usagemsg{non_getreturn}|",
-                example => "|Change the attributes mgt=hmc and netboot=grub2.|PUT|/nodes/node1 {\"mgt\":\"hmc\",\"netboot\":\"grub2\"}||",
+                example => "|Change the attributes mgt=dfm and netboot=yaboot.|PUT|/nodes/node1 {\"mgt\":\"dfm\",\"netboot\":\"yaboot\"}||",
                 cmd      => "chdef",
                 fhandler => \&defhdl,
                 outhdler => \&noout,
@@ -91,7 +91,7 @@ my %URIdef = (
             POST => {
                 desc => "Create the node {noderange}.",
                 usage => "|$usagemsg{objchparam} DataBody: {options:{opt1:v1,opt2:v2},attr1:v1,att2:v2,...}.|$usagemsg{non_getreturn}|",
-                example => "|Create a node with attributes groups=all, mgt=hmc and netboot=grub2|POST|/nodes/node1 {\"options\":{\"--template\":\"x86_64kvmguest-template\"}, \"groups\":\"all\",\"mgt\":\"hmc\",\"netboot\":\"grub2\"}||",
+                example => "|Create a node with attributes groups=all, mgt=dfm and netboot=yaboot|POST|/nodes/node1 {\"options\":{\"--template\":\"x86_64kvmguest-template\"}, \"groups\":\"all\",\"mgt\":\"dfm\",\"netboot\":\"yaboot\"}||",
                 cmd      => "mkdef",
                 fhandler => \&defhdl,
                 outhdler => \&noout,
@@ -657,7 +657,7 @@ my %URIdef = (
             PUT => {
                 desc => "Change the attributes for the group {groupname}.",
                 usage => "|$usagemsg{objchparam} DataBody: {attr1:v1,att2:v2,...}.|$usagemsg{non_getreturn}|",
-                example => "|Change the attributes mgt=hmc and netboot=grub2.|PUT|/groups/all {\"mgt\":\"hmc\",\"netboot\":\"grub2\"}||",
+                example => "|Change the attributes mgt=dfm and netboot=yaboot.|PUT|/groups/all {\"mgt\":\"dfm\",\"netboot\":\"yaboot\"}||",
                 cmd      => "chdef",
                 fhandler => \&defhdl,
                 outhdler => \&noout,
@@ -669,7 +669,7 @@ my %URIdef = (
             GET     => {
                 desc => "Get the specific attributes for the group {groupname}.",
                 usage => "||$usagemsg{objreturn}|",
-                example => "|Get the attributes {mgt,netboot} for group all|GET|/groups/all/attrs/mgt,netboot|{\n   \"all\":{\n      \"netboot\":\"grub2\",\n      \"mgt\":\"hmc\"\n   }\n}|",
+                example => "|Get the attributes {mgt,netboot} for group all|GET|/groups/all/attrs/mgt,netboot|{\n   \"all\":{\n      \"netboot\":\"yaboot\",\n      \"mgt\":\"dfm\"\n   }\n}|",
                 cmd      => "lsdef",
                 fhandler => \&defhdl,
                 outhdler => \&defout,
@@ -3588,4 +3588,5 @@ sub pushFlags {
         }
     }
 }
+
 

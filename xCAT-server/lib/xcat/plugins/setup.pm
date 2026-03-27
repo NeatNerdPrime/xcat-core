@@ -1172,7 +1172,7 @@ sub writelpar {
     # Set some attrs common to all lpars
     $tables{'nodetype'}->setNodeAttribs('lpar', { nodetype => 'ppc,osi', arch => 'ppc64' });
     $tables{'nodehm'}->setNodeAttribs('lpar', { mgt => 'fsp', cons => 'fsp' });
-    $tables{'noderes'}->setNodeAttribs('lpar', { netboot => 'grub2' });
+    $tables{'noderes'}->setNodeAttribs('lpar', { netboot => 'yaboot' });
 
     # Write regexs for some of the ppc attrs
     # Note: we assume here that if they used f1c1p1 for nodes they should use f1c1 for cecs
@@ -1468,7 +1468,7 @@ sub writesn {
     $tables{'ppc'}->setNodeAttribs('service', { id => '1', nodetype => 'lpar' });
     $tables{'nodetype'}->setNodeAttribs('service', { nodetype => 'ppc,osi', arch => 'ppc64' });
     $tables{'nodehm'}->setNodeAttribs('service', { mgt => 'fsp', cons => 'fsp' });
-    $tables{'noderes'}->setNodeAttribs('service', { netboot => 'grub2' });
+    $tables{'noderes'}->setNodeAttribs('service', { netboot => 'yaboot' });
     $tables{'servicenode'}->setNodeAttribs('service', { nameserver => 1, dhcpserver => 1, tftpserver => 1, nfsserver => 1, conserver => 1, monserver => 1, ftpserver => 1, nimserver => 1, ipforward => defined($STANZAS{'xcat-service-nodes'}->{'route-masks'}) });
     if ($STANZAS{'ll-config'}->{'central_manager_list'}) { # write the LL postscript for service nodes
         addPostscript('service', 'llserver.sh')
@@ -1621,7 +1621,7 @@ sub writestorage {
     $tables{'ppc'}->setNodeAttribs('storage', { id => '1', nodetype => 'lpar' });
     $tables{'nodetype'}->setNodeAttribs('storage', { nodetype => 'ppc,osi', arch => 'ppc64' });
     $tables{'nodehm'}->setNodeAttribs('storage', { mgt => 'fsp', cons => 'fsp' });
-    $tables{'noderes'}->setNodeAttribs('storage', { netboot => 'grub2' });
+    $tables{'noderes'}->setNodeAttribs('storage', { netboot => 'yaboot' });
 
     # Figure out what cec each storage node is in and write ppc.hcp, ppc.parent, noderes.xcatmaster, noderes.servicenode
     # Math for SN in BB:  cecnum = ( ( (snnum-1) / snsperbb) * cecsperbb) + cecstart-1 + snpositioninbb
@@ -1789,7 +1789,7 @@ sub writecompute {
     $tables{'ppc'}->setNodeAttribs('compute', { nodetype => 'lpar' });
     $tables{'nodetype'}->setNodeAttribs('compute', { nodetype => 'ppc,osi', arch => 'ppc64' });
     $tables{'nodehm'}->setNodeAttribs('compute', { mgt => 'fsp', cons => 'fsp' });
-    $tables{'noderes'}->setNodeAttribs('compute', { netboot => 'grub2' });
+    $tables{'noderes'}->setNodeAttribs('compute', { netboot => 'yaboot' });
     if ($STANZAS{'ll-config'}->{'central_manager_list'}) { # write the LL postscript for compute nodes
         addPostscript('compute', 'llcompute.sh');
     }
