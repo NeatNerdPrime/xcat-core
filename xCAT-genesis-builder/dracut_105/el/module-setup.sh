@@ -45,18 +45,15 @@ install() {
     dracut_install uniq # mellanox update requires
     dracut_install grep ip hostname /usr/bin/awk egrep grep dirname expr
     dracut_install mount.nfs sshd vi reboot lspci parted screen mkfs mkfs.ext4 mkfs.xfs xfs_db
-    _dracut_install_opt /usr/libexec/openssh/sshd-session
-    _dracut_install_opt /usr/libexec/openssh/sftp-server
     #dracut_install libvirtd /usr/share/libvirt/cpu_map.xml /usr/bin/qemu-img /usr/libexec/qemu-kvm
     dracut_install mkswap df ifenslave ssh-keygen scp clear
-    dracut_install /usr/sbin/dhclient lldpad
+    dracut_install dhclient lldpad
     dracut_install /lib64/libnss_dns.so.2
     dracut_install poweroff hwclock date /usr/share/terminfo/x/xterm /usr/share/terminfo/s/screen /etc/nsswitch.conf /etc/services
     dracut_install /sbin/rsyslogd /etc/protocols umount /bin/rpm /usr/lib/rpm/rpmrc
     #dracut_install chmod /sbin/route /sbin/ifconfig /usr/bin/whoami /usr/bin/head /usr/bin/tail basename /etc/redhat-release ping tr lsusb /usr/share/hwdata/usb.ids #ibm fw wrapper requirements
     dracut_install chmod ip /usr/bin/whoami /usr/bin/head /usr/bin/tail basename /etc/redhat-release ping tr lsusb /usr/share/hwdata/usb.ids #ibm fw wrapper requirements
-    _dracut_install_opt efibootmgr
-    _dracut_install_opt dmidecode # uxspi prereqs, but optional on minimal EL10 hosts
+    dracut_install efibootmgr dmidecode #uxspi prereqs, but will use dmidecode to improve decision on loading ipmi_si
     dracut_install lldptool
     dracut_install /usr/share/zoneinfo/posix/Zulu
     dracut_install /usr/share/zoneinfo/posix/GMT-0
