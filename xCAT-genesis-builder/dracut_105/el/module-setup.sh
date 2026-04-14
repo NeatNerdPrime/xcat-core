@@ -630,7 +630,7 @@ install() {
     dracut_install /etc/chrony.conf
     _dracut_install_opt /etc/chrony.keys
     dracut_install /run/rpcbind
-    _dracut_install_opt /etc/systemd/system.conf /usr/lib/systemd/system.conf
+    _dracut_install_opt /etc/systemd/system.conf
     dracut_install /sbin/rpc.statd /usr/sbin/sm-notify /etc/netconfig rpcbind /etc/host.conf /usr/sbin/rpc.idmapd
     dracut_install ps free find #debug
     inst_dir /var/lib/nfs

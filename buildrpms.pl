@@ -238,130 +238,23 @@ sub buildsources_genesis_base($) {
 
     die "Assertion failed! No directory xCAT-genesis-builder in the current directory"
         unless -d "./xCAT-genesis-builder";
+    my $staging_parent = "/tmp/xcat-genesis-base-build-support.$$";
+    my $staging_root = "$staging_parent/xCAT-genesis-base-build-support";
+    my $support_tarball = "$SOURCES/xCAT-genesis-base-build-support.tar.bz2";
 
-    my @deps = qw(
-        bind-utils
-        dosfstools
-        ethtool
-        ipmitool
-        kexec-tools
-        lldpad
-        mdadm
-        mstflint
-        nmap-ncat
-        net-tools
-        pciutils
-        psmisc
-        rpm-build
-        rpmdevtools
-        screen
-        usbutils
+    remove_tree($staging_parent) if -e $staging_parent;
+    make_path("$staging_root/dracut_105");
 
-        nfs-utils rpcbind
-        dhclient
-    );
-    sh("dnf install -y " . join " ", @deps)
-        and die "Error installing packages $?";
+    sh(qq(cp -a "xCAT-genesis-builder/dracut_105" "$staging_root/"))
+        and die "Error copying dracut_105 sources";
+    cp "xCAT-genesis-builder/80-net-name-slot.rules",
+       "$staging_root/80-net-name-slot.rules";
 
+    unlink $support_tarball if -f $support_tarball;
+    sh(qq(tar -cjf "$support_tarball" -C "$staging_parent" xCAT-genesis-base-build-support))
+        and die "Error creating $support_tarball";
 
-    my $dracutmoddir = "/usr/lib/dracut/modules.d/97xcat/";
-
-    my $targetarch = targetarch_from_target($target);
-    my $buildarch = genesis_tarch_from_targetarch($targetarch);
-    my $kernelversion = `uname -r`;
-    chomp $kernelversion;
-
-    my $genesispath = "/tmp/xcatgenesis.$$";
-    my $buildpath = "$genesispath/opt/xcat/share/xcat/netboot/genesis/$buildarch";
-
-    make_path $dracutmoddir;
-    make_path "$buildpath/fs/etc/ssh/";
-
-    my @files = map { "$Bin/xCAT-genesis-builder/dracut_105/el/$_" }
-        qw(
-            module-setup.sh
-            xcat-cmdline.sh
-            xcatroot
-            dhclient.conf
-            dhclient-script
-            rsyslog.conf
-        );
-    # copy @files to $dracutmoddir
-    cp $_, $dracutmoddir for @files;
-
-    # The dependents of these must be updated
-    # * netstat
-    # * /sbin/route
-    # * /sbin/ifconfig -> net-tool
-    # * nslookup
-
-
-
-    my $opts = $opts{verbose} ? "set -x" : "";
-    sh(<<"EOF");
-$opts
-dracut --compress gzip -m "xcat base" --no-early-microcode -N -f $genesispath.rfs;
-rm -rf $buildpath/fs || :
-mkdir -p $buildpath/fs || :
-cd $buildpath/fs
-zcat $genesispath.rfs | cpio -dumi
-EOF
-
-    # Ensure helper scripts remain executable in genesis rootfs.
-    # EL10 discovery needs dhclient-script to be executable.
-    for my $script (
-        "$buildpath/fs/sbin/dhclient-script",
-        "$buildpath/fs/usr/sbin/dhclient-script",
-        "$buildpath/fs/sbin/xcatroot",
-    ) {
-        chmod 0755, $script if -f $script;
-    }
-
-    my @perl_lib_dir = qw(
-        /usr/share/perl5
-        /usr/lib64/perl5
-        /usr/local/lib64/perl5
-        /usr/local/share/perl5
-        /usr/share/ntp/lib
-    );
-
-    for my $d (@perl_lib_dir) {
-        next unless -d $d;
-        my $temp_dir = "$buildpath/fs/$d";
-        make_path $temp_dir;
-        # cp function does not copy directories recursively
-        `cp -a -t $temp_dir $d/.`;
-    }
-
-    make_path "$buildpath/fs/lib/udev/rules.d/";
-    my $oldcwd = Cwd::cwd();
-    my $lib_udev_rules="/lib/udev/rules.d/";
-    cp "$lib_udev_rules/80-net-name-slot.rules", "$buildpath/fs/lib/udev/rules.d/"
-        if -e "$lib_udev_rules/80-net-name-slot.rules";
-
-    # Keep historical layout: kernel is a file, not a directory.
-    # mknb expects genesis/<arch>/kernel to be copied as a kernel file.
-    unlink "$buildpath/kernel" if -l "$buildpath/kernel" || -f "$buildpath/kernel";
-    remove_tree "$buildpath/kernel" if -d "$buildpath/kernel";
-    cp "/boot/vmlinuz-$kernelversion", "$buildpath/kernel";
-
-    # Create the targz
-    #
-    # Note:
-    #
-    #   Deletes character devices from the genesis-base
-    #   image filesystem prior to tarball creation. The installation
-    #   of the package fails in vanilla containers with "Operation not
-    #   permited" during the creation of
-    #
-    #       /opt/xcat/../genesis/../fs/dev/{console,random,...}
-    #
-    #   otherwise.
-    sh(<<"EOF")
-cd $genesispath
-find . -type c -delete
-tar jcf $SOURCES/xCAT-genesis-base-$buildarch.tar.bz2 opt
-EOF
+    remove_tree($staging_parent);
 }
 
 sub buildsources {
