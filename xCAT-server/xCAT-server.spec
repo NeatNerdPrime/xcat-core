@@ -52,7 +52,9 @@ Obsoletes: atftp-xcat
 #
 # PCM does not use or ship grub2-xcat
 %if %nots390x
-Requires: grub2-xcat >= 2.02-0.76.el7.1.snap201905160255 perl-Net-HTTPS-NB perl-HTTP-Async
+Requires: grub2-xcat >= 2.02-0.76.el7.1.snap201905160255
+Requires: perl-Net-HTTPS-NB >= 0.14-3
+Requires: perl-HTTP-Async >= 0.30-3
 %endif
 %endif
 %endif
@@ -127,6 +129,23 @@ mkdir -p $RPM_BUILD_ROOT/%{prefix}/lib/perl/xCAT
 %ifos linux
 cp -a share/xcat/install/* $RPM_BUILD_ROOT/%{prefix}/share/xcat/install/
 cp -a share/xcat/netboot/* $RPM_BUILD_ROOT/%{prefix}/share/xcat/netboot/
+
+# Preserve netboot dracut aliases as symlinks so rpm upgrades do not fail when
+# replacing older xCAT-server packages that already own these paths as symlinks.
+for _required_symlink in \
+    SL/dracut_033 \
+    alma/dracut alma/dracut_033 alma/dracut_047 \
+    centos/dracut centos/dracut_033 centos/dracut_047 \
+    fedora/dracut_047 \
+    ol/dracut ol/dracut_033 ol/dracut_047 \
+    rocky/dracut rocky/dracut_033 rocky/dracut_047 rocky/dracut_105
+do
+    _target="$RPM_BUILD_ROOT/%{prefix}/share/xcat/netboot/${_required_symlink}"
+    if [ ! -L "$_target" ]; then
+        echo "ERROR: expected symlink missing or dereferenced: $_target" >&2
+        exit 1
+    fi
+done
 %else
 cp -hpR share/xcat/install/* $RPM_BUILD_ROOT/%{prefix}/share/xcat/install/
 cp -hpR share/xcat/netboot/* $RPM_BUILD_ROOT/%{prefix}/share/xcat/netboot/
@@ -441,6 +460,16 @@ if [ -d $RPM_INSTALL_PREFIX0/share/xcat/devicetype/EthSwitch/Juniper ]; then
     rm -rf $RPM_INSTALL_PREFIX0/share/xcat/devicetype/EthSwitch/Juniper
 fi
 
+# Newer xCAT-server payloads replace legacy dracut symlinks with real
+# directories/files in several distro trees. Remove the old symlinks up front
+# so RPM can upgrade the package cleanly.
+for distro in SL alma centos fedora ol rocky; do
+    if [ -d "$RPM_INSTALL_PREFIX0/share/xcat/netboot/$distro" ]; then
+        find "$RPM_INSTALL_PREFIX0/share/xcat/netboot/$distro" \
+            -maxdepth 2 -type l -name 'dracut*' -exec rm -f {} +
+    fi
+done
+
 %post
 %ifos linux
 ln -sf $RPM_INSTALL_PREFIX0/sbin/xcatd /usr/sbin/xcatd
@@ -507,6 +536,16 @@ then
    cp /etc/%httpconfigdir/conf.orig/xcat-ws.conf.apache24 /etc/apache2/conf.d/xcat-ws.conf
 fi
 
+# @FIXME: (for v2.19+) Remove this and use the supported dhcp
+%ifos linux
+# In EL10 dhcp-client is not provided by the O.S repositories anymore
+# so we download it to a directory which is appended to netboot
+# pkgdir during copycds, s.t. genimage <netboot> succeds without
+# need for human intervention. At the moment of writing the dhcp-client
+# is provided by xCAT 2.18 unified repository as a dependency.
+dnf download --destdir=/install/dhcp_pkgs/ dhcp-client
+%endif
+
 exit 0
 
 %preun
@@ -527,4 +566,3 @@ if [ $1 == 0 ]; then  #This means only on -e
 
 fi
 %endif
-

@@ -379,7 +379,9 @@ sub findme {
                     if ($nodechain !~ /osimage=/) {
                         $nodechain = $nodechain . ",osimage=$param{'osimage'}";
                     } else {
-                        $nodechain =~ s/osimage=\w+/osimage=$param{'osimage'}/;
+                        # Replace the full osimage token up to chain separator.
+                        # Using \w+ corrupts image names containing '.' or '-'.
+                        $nodechain =~ s/osimage=[^,;]+/osimage=$param{'osimage'}/;
                     }
                 }
             }    # end if $param{'osimage'}

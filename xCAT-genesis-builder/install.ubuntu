@@ -29,7 +29,8 @@ else
     dracut_install /usr/lib/libldap-2.4.so.2 /usr/lib/liblber-2.4.so.2 /usr/lib64/libsasl2.so.2 #uxspi has incurred these...
     dracut_install /lib/libc.so.6
 fi
-dracut_install chmod /lib/ld-linux.so.2 /sbin/route /sbin/ifconfig /usr/bin/head /etc/debian_version /etc/lsb-release ping tr lsusb /usr/share/hwdata/usb.ids #ibm fw wrapper requirements
+#dracut_install chmod /lib/ld-linux.so.2 /sbin/route /sbin/ifconfig /usr/bin/head /etc/debian_version /etc/lsb-release ping tr lsusb /usr/share/hwdata/usb.ids #ibm fw wrapper requirements
+dracut_install chmod /lib/ld-linux.so.2 ip /usr/bin/head /etc/debian_version /etc/lsb-release ping tr lsusb /usr/share/hwdata/usb.ids #ibm fw wrapper requirements
 dracut_install /usr/share/zoneinfo/posix/Zulu
 dracut_install /usr/share/zoneinfo/posix/GMT-0
 dracut_install /usr/share/zoneinfo/posix/Europe/Istanbul

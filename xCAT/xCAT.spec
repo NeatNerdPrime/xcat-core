@@ -35,13 +35,32 @@ Requires: xCAT-server = 4:%{version}-%{release}
 %define s390x %(if [ "$s390x" = "1" ];then echo 1; else echo 0; fi)
 %define nots390x %(if [ "$s390x" = "1" ];then echo 0; else echo 1; fi)
 
+# Match xCAT-genesis-scripts package naming by build architecture.
+%ifarch i386 i586 i686 x86
+%define genesistarch x86
+%endif
+%ifarch x86_64
+%define genesistarch x86_64
+%endif
+%ifarch ppc ppc64 ppc64le
+%define genesistarch ppc64
+%endif
+%ifarch aarch64
+%define genesistarch aarch64
+%endif
+
 # Define a different location for various httpd configs in s390x mode
 %define httpconfigdir %(if [ "$s390x" = "1" ];then echo "xcathttpdsave"; else echo "xcat"; fi)
 
 %if %nots390x
 Requires: xCAT-probe  = 4:%{version}-%{release}
+Requires: xCAT-genesis-scripts-%{genesistarch} = 1:%{version}-%{release}
+%ifarch x86_64
+Requires: xCAT-genesis-scripts-ppc64 = 1:%{version}-%{release}
+%endif
+%ifarch ppc ppc64 ppc64le
 Requires: xCAT-genesis-scripts-x86_64 = 1:%{version}-%{release}
-Requires: xCAT-genesis-scripts-ppc64  = 1:%{version}-%{release}
+%endif
 %endif
 
 Requires: rsync
@@ -57,36 +76,33 @@ Requires: /usr/sbin/dhcpd
 Requires: /usr/bin/ssh
 %if %nots390x
 Requires: /usr/sbin/in.tftpd
-Requires: xCAT-buildkit
+Requires: xCAT-buildkit = 4:%{version}-%{release}
 # Stty is only needed for rcons on ppc64 nodes, but for mixed clusters require it on both x and p
-Requires: perl-IO-Stty
+Requires: perl-IO-Stty >= 0.04-5
 %endif
 %endif
 
 %ifos linux
-Requires: goconserver >= 0.3.3
+Requires: goconserver >= 0.3.3-snap202011021058
 %endif
 
 #support mixed cluster
 %if %nots390x
-Requires: elilo-xcat xnba-undi
+Requires: elilo-xcat >= 3.14-6
 %endif
 
 %ifarch i386 i586 i686 x86 x86_64
-Requires: syslinux
-Requires: ipmitool-xcat >= 1.8.17-1
+Requires: xnba-undi >= 1.21.1-1
+Requires: syslinux-xcat >= 6.03-1
+Requires: ipmitool-xcat >= 1.8.18-4
 %endif
 
 %ifos linux
 %ifarch ppc ppc64 ppc64le
-Requires: ipmitool-xcat >= 1.8.17-1
-%endif
-%endif
-
-%if %notpcm
-# PCM does not need or ship syslinux-xcat
-%if %nots390x
-Requires: syslinux-xcat
+# Mixed-arch management nodes also need the x86 PXE stack kept current.
+Requires: xnba-undi >= 1.21.1-1
+Requires: syslinux-xcat >= 6.03-1
+Requires: ipmitool-xcat >= 1.8.18-4
 %endif
 %endif
 
