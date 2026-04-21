@@ -2014,6 +2014,11 @@ sub mknb
     }
     if ($run_mknb) {
         foreach (qw(ppc64 x86_64)) {
+            my $genesis_base_pkg = "xCAT-genesis-base-$_";
+            if (system("rpm -q $genesis_base_pkg >/dev/null 2>&1") != 0) {
+                xCAT::MsgUtils->message('I', "Skipping '$cmd $_' because $genesis_base_pkg is not installed.");
+                next;
+            }
             system("$cmd $_");
             if ($? != 0) {
                 my $rc = $? >> 8;

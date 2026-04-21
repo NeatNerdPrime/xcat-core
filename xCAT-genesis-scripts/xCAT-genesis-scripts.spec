@@ -4,7 +4,7 @@
 %ifarch x86_64
 %define tarch x86_64
 %endif
-%ifarch ppc ppc64
+%ifarch ppc ppc64 ppc64le
 %define tarch ppc64
 %endif
 %ifarch aarch64
@@ -32,7 +32,7 @@ Vendor: IBM Corp.
 Summary: xCAT Genesis netboot image - Core content
 URL:	 https://xcat.org/
 Source1: xCAT-genesis-scripts.tar.bz2
-Requires: xCAT-genesis-base-%{tarch} >= 2:2.13.10
+Requires: xCAT-genesis-base-%{tarch} = 2:%{version}-%{release}
 
 Buildroot: %{_localstatedir}/tmp/xCAT-genesis
 Packager: IBM Corp.

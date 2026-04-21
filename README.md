@@ -2,26 +2,26 @@
 
 xCAT is a toolkit for deployment and administration of clusters of all sizes.
 
-# Sunsetting xCAT and transitioning to Confluent
+# The xCAT sunset was only a quick eclipse
 
 Dear xCAT Community,
 
-As noted in our previous updates and during the informal BoF sessions at SC’23 and SC’24, the consortium has been focused on both completing the final work for xCAT and preparing for the transition to its successor.
+The xCAT sunset has changed course. VersatusHPC has been invited to join the xCAT Consortium, and future development will move toward direct upstream contributions coordinated with the Consortium and its existing member companies.
 
-As committed, we delivered Enterprise Linux 9 (EL9) support in the xCAT 2.17 release. This represents the final planned enablement for xCAT.
+That matters most for Enterprise Linux 10 (EL10). EL10 support is coming to xCAT, restoring a future operating-system path for sites that still rely on xCAT. This is an important change from the previous sunset guidance, where the lack of an EL10 path was one of the strongest reasons to move away from xCAT.
 
-xCAT is now officially being sunsetted. The consortium will not provide support beyond existing platforms, and Enterprise Linux 10 (EL10) will not be supported. Active development and all new feature work have transitioned fully to **Confluent**, which we recognise as the official successor to xCAT.
+The xCAT Consortium continues to recommend **Confluent** as the long-term successor to xCAT, and that remains the Consortium position. Users planning new cluster-management deployments should evaluate Confluent and its xCAT comparison documentation.
 
-While xCAT will remain in maintenance mode, with community pull requests still welcome and reviewed, there will be no new features or support for future operating systems.
+At the same time, xCAT is no longer sunsetted. The Consortium and participating companies will continue updating xCAT while there is community and user demand for it.
 
 In summary:
 
-- xCAT has delivered its final milestone with EL9 support.
-- No EL10 or future OS enablement will be added.
-- Community contributions are still accepted and reviewed.
-- All development effort is now focused on **Confluent**, the successor to xCAT.
+- xCAT development is continuing upstream through the Consortium and participating companies.
+- Enterprise Linux 10 support is coming.
+- Confluent remains the Consortium-recommended successor and migration path.
+- xCAT updates will continue while there is community and user demand.
 
-We want to sincerely thank the community for the years of contributions, support, and participation in shaping xCAT. We now look forward to continuing that journey with you in the **Confluent community**, where the future of open, vendor-agnostic cluster management will continue to grow.
+We want to thank the xCAT Consortium and community for keeping this project moving. The sun went behind the moon for a moment, but xCAT is still here.
 
 For more information on **Confluent** and how to get started, please visit the **Confluent**: [Project Page](https://github.com/xcat2/confluent), [Documentation](https://xcat2.github.io/confluent-docs/) or [Confluent vs xCAT comparison](https://xcat2.github.io/confluent-docs/miscellaneous/confluentvxcat/).
 
@@ -49,4 +49,3 @@ xCAT is made available under the EPL license: https://opensource.org/licenses/ec
 # Developers
 
 Want to help? Check out the [developers guide](http://xcat-docs.readthedocs.io/en/latest/developers)!
-

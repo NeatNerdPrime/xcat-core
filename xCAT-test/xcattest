@@ -53,7 +53,7 @@ my $NORUN = 0;
 my $RUN   = 1;
 
 #----------global logs attributes---------------
-my $running_log_fd     = undef
+my $running_log_fd     = undef;
 my $running_log_name   = undef;
 my $failed_log_name      = undef;
 my $performance_log_name = undef;

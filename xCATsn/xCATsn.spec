@@ -14,14 +14,27 @@ BuildRoot: /var/tmp/%{name}-%{version}-%{release}-root
 Source1: xcat.conf
 Source2: license.tar.gz
 Source3: xCATSN
+Source4: etc.tar.gz
 Source5: templates.tar.gz
 Source6: xcat.conf.apach24
 Requires: perl-DBD-SQLite
 Requires: xCAT-client = 4:%{version}-%{release}
 Requires: xCAT-server = 4:%{version}-%{release}
 Requires: xCAT-probe  = 4:%{version}-%{release}
+
+# Match xCAT-genesis-scripts package naming by build architecture.
+%ifarch i386 i586 i686 x86
+Requires: xCAT-genesis-scripts-x86 = 1:%{version}-%{release}
+%endif
+%ifarch x86_64
 Requires: xCAT-genesis-scripts-x86_64 = 1:%{version}-%{release}
-Requires: xCAT-genesis-scripts-ppc64  = 1:%{version}-%{release}
+%endif
+%ifarch ppc ppc64 ppc64le
+Requires: xCAT-genesis-scripts-ppc64 = 1:%{version}-%{release}
+%endif
+%ifarch aarch64
+Requires: xCAT-genesis-scripts-aarch64 = 1:%{version}-%{release}
+%endif
 
 Conflicts: xCAT
 
@@ -52,22 +65,18 @@ Requires: goconserver >= 0.3.3
 
 #support mixed cluster
 %ifnarch s390x
-Requires: elilo-xcat xnba-undi
+Requires: elilo-xcat
 %endif
 
 %ifarch i386 i586 i686 x86 x86_64
-Requires: syslinux
+Requires: xnba-undi
+Requires: syslinux-xcat
 Requires: ipmitool-xcat >= 1.8.17-1
 %endif
 %ifos linux
 %ifarch ppc ppc64 ppc64le
 Requires: ipmitool-xcat >= 1.8.17-1
 %endif
-%endif
-
-%if %notpcm
-# PCM does not need or ship syslinux-xcat
-Requires: syslinux-xcat
 %endif
 
 %description
@@ -79,6 +88,7 @@ set of compute node. xCATsn package provides xCAT service node support.
 %prep
 %ifos linux
 tar zxf %{SOURCE2}
+tar zxf %{SOURCE4}
 %else
 cp %{SOURCE2} /opt/freeware/src/packages/BUILD
 gunzip -f license.tar.gz

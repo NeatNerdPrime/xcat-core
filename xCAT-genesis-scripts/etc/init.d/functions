@@ -789,7 +789,34 @@ start_udevd() {
 ifconfig_loopback() {
     logmsg
     logmsg ifconfig_loopback
-    ifconfig lo 127.0.0.1
+    #ifconfig lo 127.0.0.1
+    ip link set lo up
+    ip addr replace 127.0.0.1/8 dev lo
+}
+#
+################################################################################
+#
+# Convert netmask to prefix length (e.g. 255.255.255.0 -> 24)
+mask2prefix() {
+    nbits=0
+    old_ifs=$IFS
+    IFS=.
+    for dec in $1 ; do
+        case $dec in
+            255) nbits=$((nbits+8));;
+            254) nbits=$((nbits+7));;
+            252) nbits=$((nbits+6));;
+            248) nbits=$((nbits+5));;
+            240) nbits=$((nbits+4));;
+            224) nbits=$((nbits+3));;
+            192) nbits=$((nbits+2));;
+            128) nbits=$((nbits+1));;
+            0);;
+            *) IFS=$old_ifs; return 1;;
+        esac
+    done
+    IFS=$old_ifs
+    echo "$nbits"
 }
 #
 ################################################################################
@@ -920,7 +947,23 @@ start_network() {
     if [ ! -z $IPADDR ]; then
 
         # configure interface and add default gateway
-        ifconfig $DEVICE $IPADDR  netmask $NETMASK  broadcast $BROADCAST
+        #ifconfig $DEVICE $IPADDR  netmask $NETMASK  broadcast $BROADCAST
+        if [ -z "$NETMASK" ]; then
+            logmsg
+            logmsg "Invalid netmask: $NETMASK"
+            shellout
+        fi
+        numbits=$(mask2prefix $NETMASK)
+        if [ $? != 0 -o -z "$numbits" ]; then
+            logmsg
+            logmsg "Invalid netmask: $NETMASK"
+            shellout
+        fi
+        if [ -n "$BROADCAST" ]; then
+            ip link set $DEVICE up && ip addr replace $IPADDR/$numbits brd $BROADCAST dev $DEVICE
+        else
+            ip link set $DEVICE up && ip addr replace $IPADDR/$numbits dev $DEVICE
+        fi
         if [ $? != 0 ]; then
             logmsg
             logmsg "I couldn't configure the network interface using your pre-boot settings:"
@@ -933,10 +976,12 @@ start_network() {
         fi
 
         if [ ! -z $GATEWAY ]; then
-            route add default gw $GATEWAY
+            #route add default gw $GATEWAY
+            ip route add default via $GATEWAY
             if [ $? != 0 ]; then
                 logmsg
-                logmsg "The command \"route add default gw $GATEWAY\" failed."
+                #logmsg "The command \"route add default gw $GATEWAY\" failed."
+                logmsg "The command \"ip route add default via $GATEWAY\" failed."
                 logmsg "Check your pre-boot network settings."
                 logmsg
                 shellout
