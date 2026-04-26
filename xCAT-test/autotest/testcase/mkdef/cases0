@@ -411,3 +411,34 @@ check:rc==0
 cmd:rmdef -t osimage -o rhels7.3-test
 check:rc==0
 end
+
+start:mkdef_node_no_attrs
+description:mkdef -t node with no attributes should fail and mention groups
+label:mn_only,ci_test,db
+cmd:mkdef -t node -o testnode_noattr
+check:rc!=0
+check:output=~groups
+cmd:lsdef testnode_noattr
+check:rc!=0
+end
+
+start:mkdef_node_no_groups
+description:mkdef -t node with attributes but no groups should fail
+label:mn_only,ci_test,db
+cmd:mkdef -t node -o testnode_nogrp ip=10.0.0.99
+check:rc!=0
+check:output=~groups
+cmd:lsdef testnode_nogrp
+check:rc!=0
+cmd:rmdef -t node -o testnode_nogrp
+end
+
+start:mkdef_nonnode_no_attrs
+description:mkdef with non-node type and no attributes should fail with generic message
+label:mn_only,ci_test,db
+cmd:mkdef -t network -o testnet_noattr
+check:rc!=0
+check:output=~no attributes were specified
+cmd:rmdef -t network -o testnet_noattr
+end
+
