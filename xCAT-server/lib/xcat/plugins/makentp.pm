@@ -320,14 +320,17 @@ sub process_request {
       or xCAT::MsgUtils->message('SE',
         "Cannot open $ntpcfg for NTP update. \n");
 
+    print CFGFILE "restrict default nomodify notrap nopeer noquery\n";
+    print CFGFILE "restrict 127.0.0.1\n";
+    print CFGFILE "restrict ::1\n\n";
+
     if (defined($ntp_servers) && $ntp_servers) {
         my @npt_server_array = split(',', $ntp_servers);
 
         # add ntp servers one by one
         foreach my $ntps (@npt_server_array) {
             if (!$ntp_master) { $ntp_master = $ntps; }
-            print CFGFILE "server ";
-            print CFGFILE "$ntps\n";
+            print CFGFILE "server $ntps iburst\n";
         }
     }
 
@@ -337,19 +340,18 @@ sub process_request {
     if (xCAT::Utils->isAIX()) {
         print CFGFILE "driftfile /etc/ntp.drift\n";
         print CFGFILE "tracefile /etc/ntp.trace\n";
-        print CFGFILE "disable auth\n";
         print CFGFILE "broadcastclient\n";
     } elsif ($os =~ /sles/) {
         print CFGFILE "driftfile /var/lib/ntp/drift/ntp.drift\n";
-        print CFGFILE "disable auth\n";
     } else {
         print CFGFILE "driftfile /var/lib/ntp/drift\n";
-        print CFGFILE "disable auth\n";
     }
 
     #add xCAT mn/sn itself as a server
     print CFGFILE "server 127.127.1.0\n";
     print CFGFILE "fudge 127.127.1.0 stratum 10\n";
+
+    print CFGFILE "disable monitor\n";
 
     close CFGFILE;
 
