@@ -1676,6 +1676,24 @@ sub defmk
         $error = 1;
     }
 
+    # If no object definitions ended up in FINALATTRS, there is nothing to create
+    if (!$error && !%::FINALATTRS)
+    {
+        my $rsp;
+        my $is_node_type = (grep { $_ eq "node" } @::finalTypeList) ||
+                           ($::opt_t && $::opt_t =~ /\bnode\b/);
+        if ($is_node_type)
+        {
+            $rsp->{data}->[0] = "No object definitions have been created or modified: no attributes were specified. The \'groups\' attribute is required when creating node definitions.";
+        }
+        else
+        {
+            $rsp->{data}->[0] = "No object definitions have been created or modified: no attributes were specified.";
+        }
+        xCAT::MsgUtils->message("E", $rsp, $::callback);
+        return 1;
+    }
+
     # we need a list of objects that are
     #    already defined for each type.
     foreach my $t (@::finalTypeList)
