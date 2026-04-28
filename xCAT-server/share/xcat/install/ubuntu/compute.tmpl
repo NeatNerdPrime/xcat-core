@@ -87,6 +87,8 @@ d-i apt-setup/multiverse boolean false
 d-i apt-setup/universe boolean false
 d-i apt-setup/backports boolean false
 d-i apt-setup/updates boolean false
+# Keep legacy d-i installs on the local mirror/content only.
+d-i apt-setup/services-select multiselect
 
 
 ### Boot loader installation
@@ -143,8 +145,10 @@ d-i preseed/late_command string \
      mount -o bind /dev/pts /target/dev/pts -t devpts; \
      mount -o bind /sys /target/sys; \
      chroot /target /root/post.script; \
+     if [ -f /target/etc/apt/sources.list ]; then \
+       sed -i -e '/^[[:space:]]*deb[[:space:]].*[[:space:]][^[:space:]]*-\(security\|updates\|backports\)[[:space:]]/s/^/# /' -e '/^[[:space:]]*deb-src[[:space:]].*[[:space:]][^[:space:]]*-\(security\|updates\|backports\)[[:space:]]/s/^/# /' /target/etc/apt/sources.list; \
+     fi; \
      if [ -f /target/etc/network/interfaces ]; then \
        cp /target/etc/network/interfaces /etc/network/interfaces; \
      fi; \
      } >>/target/var/log/xcat/xcat.log 2>&1
-

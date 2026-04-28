@@ -265,6 +265,7 @@ sub setstate {
             print $pcfg "exit\n";
         }
         close($pcfg);
+        _write_uefi_exit_script($bootloader_root, $node, $cref->{currstate});
     } elsif ($kern and $kern->{kernel}) {
         if ($kern->{kernel} =~ /!/) { #TODO: deprecate this, do stateless Xen like stateless ESXi
             my $hypervisor;
@@ -360,8 +361,19 @@ sub setstate {
     } else {    #TODO: actually, should possibly default to xCAT image?
         print $pcfg "LOCALBOOT 0\n";
         close($pcfg);
+        _write_uefi_exit_script($bootloader_root, $node, $cref->{currstate});
     }
     return (0, "");
+}
+
+sub _write_uefi_exit_script {
+    my ($bootloader_root, $node, $state) = @_;
+
+    open(my $ucfg, '>', "$bootloader_root/$node.uefi");
+    print $ucfg "#!gpxe\n";
+    print $ucfg "#$state\n" if $state;
+    print $ucfg "exit\n";
+    close($ucfg);
 }
 
 

@@ -205,9 +205,9 @@ base64decode()
 # must be the last partition on the disk - this forces us to put swap before
 # the main root partition, and forces us to have a fixed size swap partition
 #
-# Also, the autoinstall.yaml file that this needs to be appended to is a
-# modified cloud-init.conf file, with the top level elided - hence the
-# storage block below needs to start with no indentation.
+# Subiquity re-serializes /autoinstall.yaml after the first load,
+# stripping the autoinstall: wrapper.  The storage block is appended
+# to this unwrapped file and must start at column 0.
 logger -t $log_label -p "info" "Generate partition file..."
 if [ -e /tmp/xcat.install_disk ]; then
         INSTALL_DISK=$(cat /tmp/xcat.install_disk)
@@ -220,42 +220,113 @@ fi
 if [ -d /sys/firmware/efi ]; then
         cat <<EOF >/tmp/partitionfile
 storage:
+  version: 1
   config:
-    - {id: disk-detected, ptable: gpt, path: $INSTALL_DISK, wipe: superblock,
-      preserve: false, name: '', grub_device: true, type: disk}
-    - {id: efi-part, device: disk-detected, size: 512MB, flag: boot,
-      type: partition, preserve: false}
-    - {id: swap-part, device: disk-detected, size: 2GB, flag: swap,
-      type: partition, preserve: false}
-    - {id: root-part, device: disk-detected, size: -1, type: partition,
-      preserve: false}
-    - {id: efi-part-fs, volume: efi-part, type: format, fstype: fat, label: efi}
-    - {id: swap-part-fs, volume: swap-part, type: format, fstype: swap}
-    - {id: root-part-fs, volume: root-part, type: format, fstype: ext4,
-      label: root}
-    - {id: efi-part-mount, device: efi-part-fs, type: mount, path: /boot/efi}
-    - {id: swap-part-mount, device: swap-part-fs, type: mount, path: none}
-    - {id: root-part-mount, device: root-part-fs, type: mount, path: /}
+    - id: disk-detected
+      type: disk
+      ptable: gpt
+      path: $INSTALL_DISK
+      wipe: superblock-recursive
+      preserve: false
+    - id: efi-part
+      type: partition
+      device: disk-detected
+      size: 512M
+      flag: boot
+      number: 1
+      preserve: false
+      grub_device: true
+    - id: swap-part
+      type: partition
+      device: disk-detected
+      size: 2G
+      number: 2
+      preserve: false
+    - id: root-part
+      type: partition
+      device: disk-detected
+      size: -1
+      wipe: superblock
+      number: 3
+      preserve: false
+    - id: efi-part-fs
+      type: format
+      fstype: fat32
+      volume: efi-part
+      preserve: false
+    - id: swap-part-fs
+      type: format
+      fstype: swap
+      volume: swap-part
+      preserve: false
+    - id: root-part-fs
+      type: format
+      fstype: ext4
+      volume: root-part
+      preserve: false
+    - id: efi-part-mount
+      type: mount
+      path: /boot/efi
+      device: efi-part-fs
+    - id: swap-part-mount
+      type: mount
+      path: none
+      device: swap-part-fs
+    - id: root-part-mount
+      type: mount
+      path: /
+      device: root-part-fs
 EOF
 else
         cat <<EOF >/tmp/partitionfile
 storage:
+  version: 1
   config:
-    - {id: disk-detected, ptable: msdos, path: $INSTALL_DISK, wipe: superblock,
-      preserve: false, name: '', grub_device: true, type: disk}
-    - {id: boot-part, device: disk-detected, size: 512MB, flag: boot,
-      type: partition, preserve: false}
-    - {id: swap-part, device: disk-detected, size: 2GB, flag: swap,
-      type: partition, preserve: false}
-    - {id: root-part, device: disk-detected, size: -1, type: partition,
-      preserve: false}
-    - {id: boot-part-fs, volume: boot-part, type: format, fstype: ext4, label: boot}
-    - {id: swap-part-fs, volume: swap-part, type: format, fstype: swap}
-    - {id: root-part-fs, volume: root-part, type: format, fstype: ext4,
-      label: root}
-    - {id: boot-part-mount, device: boot-part-fs, type: mount, path: /boot}
-    - {id: swap-part-mount, device: swap-part-fs, type: mount, path: none}
-    - {id: root-part-mount, device: root-part-fs, type: mount, path: /}
+    - id: disk-detected
+      type: disk
+      ptable: gpt
+      path: $INSTALL_DISK
+      wipe: superblock-recursive
+      preserve: false
+      grub_device: true
+    - id: bios-grub
+      type: partition
+      device: disk-detected
+      size: 1M
+      flag: bios_grub
+      number: 1
+      preserve: false
+    - id: swap-part
+      type: partition
+      device: disk-detected
+      size: 2G
+      number: 2
+      preserve: false
+    - id: root-part
+      type: partition
+      device: disk-detected
+      size: -1
+      wipe: superblock
+      number: 3
+      preserve: false
+    - id: swap-part-fs
+      type: format
+      fstype: swap
+      volume: swap-part
+      preserve: false
+    - id: root-part-fs
+      type: format
+      fstype: ext4
+      volume: root-part
+      preserve: false
+    - id: swap-part-mount
+      type: mount
+      path: none
+      device: swap-part-fs
+    - id: root-part-mount
+      type: mount
+      path: /
+      device: root-part-fs
 EOF
 fi
 
@@ -265,6 +336,5 @@ fi
 exit 0
 
 if [ "$XCATDEBUGMODE" = "1" ] || [ "$XCATDEBUGMODE" = "2" ]; then
-then
     set +x
 fi

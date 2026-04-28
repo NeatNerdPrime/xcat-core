@@ -158,6 +158,66 @@ sub get_os {
     return $os;
 }
 
+sub _netplan_get {
+    my $key = shift;
+    open(my $fh, '-|', 'netplan', 'get', $key) or return undef;
+    my $val = <$fh>;
+    close $fh;
+    return undef if $?;
+    chomp $val if defined $val;
+    return $val;
+}
+
+sub _command_available {
+    my $cmd = shift;
+    for my $dir (split /:/, $ENV{PATH} || '') {
+        next unless $dir;
+        return 1 if -x "$dir/$cmd";
+    }
+    return 0;
+}
+
+sub _netplan_has_static_ip {
+    my ($nic, $ip) = @_;
+
+    return 0 unless _command_available('netplan');
+
+    (my $escaped_nic = $nic) =~ s/\./\\./g;
+    for my $devtype (qw(ethernets bonds bridges vlans)) {
+        my $dev_obj = _netplan_get("$devtype.$escaped_nic");
+        next unless defined $dev_obj;
+        next if ($dev_obj eq 'null' || $dev_obj eq '');
+
+        my $addresses = _netplan_get("$devtype.$escaped_nic.addresses");
+        next unless defined $addresses;
+        next if ($addresses eq 'null' || $addresses eq '');
+        next unless $addresses =~ /(?:^|[\s\[,])\Q$ip\E(?:\/\d+)?(?:$|[\s\],])/m;
+
+        my $dhcp_val = _netplan_get("$devtype.$escaped_nic.dhcp4");
+        return 0 if defined $dhcp_val && $dhcp_val =~ /true/i;
+        return 1;
+    }
+
+    return 0;
+}
+
+sub dhcp_query_reply_mac {
+    my ($reply, $node, $ip) = @_;
+
+    return unless defined $reply && defined $node && defined $ip;
+    return $1 if $reply =~ /\Q$node\E:\s+ip-address\s*=\s*\Q$ip\E,?\s+hardware-address\s*=\s*([0-9a-f:]+)/i;
+    return;
+}
+
+sub dhcp_query_reply_matches {
+    my ($reply, $node, $ip, $mac) = @_;
+
+    return 0 unless defined $mac;
+    my $reply_mac = dhcp_query_reply_mac($reply, $node, $ip);
+    return 0 unless defined $reply_mac;
+    return lc($reply_mac) eq lc($mac);
+}
+
 #------------------------------------------
 
 =head3
@@ -206,8 +266,9 @@ sub is_static_ip {
         my $output2 = `cat /etc/sysconfig/network/ifcfg-$nic 2>&1 |grep -i BOOTPROTO`;
         $rst = 1 if (($output1 =~ /$ip/) && ($output2 =~ /static/i));
     } elsif ($os =~ /ubuntu/) {
-        my $output = `cat /etc/network/interfaces 2>&1|grep -E "iface\\s+$nic"`;
-        $rst = 1 if ($output =~ /static/i);
+        return 1 if _netplan_has_static_ip($nic, $ip);
+        my $output = `cat /etc/network/interfaces 2>&1`;
+        $rst = 1 if (($output =~ /iface\s+\Q$nic\E\s+inet\s+static/i) && ($output =~ /\baddress\s+\Q$ip\E(?:\/\d+)?\b/i));
     }
     return $rst;
 }

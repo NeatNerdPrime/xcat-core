@@ -76,7 +76,8 @@ is_deeply( $config->{Dhcp4}{'interfaces-config'}{interfaces}, ['eth0'], 'interfa
 is( $config->{Dhcp4}{'valid-lifetime'}, 600, 'valid lifetime is rendered' );
 is( $config->{Dhcp4}{'lease-database'}{type}, 'memfile', 'memfile lease backend is the default' );
 is( $config->{Dhcp4}{'reservations-in-subnet'}, JSON::true, 'subnet host reservations are enabled by default' );
-is( $config->{Dhcp4}{'reservations-out-of-pool'}, JSON::true, 'out-of-pool host reservations are enabled by default' );
+is( $config->{Dhcp4}{'reservations-out-of-pool'}, JSON::true, 'out-of-pool host reservations are enabled for xCAT static addresses' );
+is( $config->{Dhcp4}{'match-client-id'}, JSON::false, 'DHCPv4 leases match MAC reservations when client-id changes across boot stages' );
 
 my $subnet = $config->{Dhcp4}{subnet4}[0];
 is( $subnet->{id}, 1, 'subnet id is rendered' );
@@ -191,8 +192,9 @@ is( $empty_boot_subnet->{'boot-file-name'}, '', 'empty boot-file-name is preserv
 
 my $reservation_policy_json = $backend->render_dhcp4_config(
     {
-        'reservations-in-subnet'   => 1,
-        'reservations-out-of-pool' => 1,
+        'reservations-in-subnet'   => 0,
+        'reservations-out-of-pool' => 0,
+        'match-client-id'          => 1,
         subnets => [
             {
                 id     => 9,
@@ -203,8 +205,9 @@ my $reservation_policy_json = $backend->render_dhcp4_config(
     }
 );
 my $reservation_policy_config = decode_json($reservation_policy_json);
-is( $reservation_policy_config->{Dhcp4}{'reservations-in-subnet'}, JSON::true, 'reservation in-subnet policy can be overridden' );
-is( $reservation_policy_config->{Dhcp4}{'reservations-out-of-pool'}, JSON::true, 'reservation out-of-pool policy can be overridden' );
+is( $reservation_policy_config->{Dhcp4}{'reservations-in-subnet'}, JSON::false, 'reservation in-subnet policy can be overridden' );
+is( $reservation_policy_config->{Dhcp4}{'reservations-out-of-pool'}, JSON::false, 'reservation out-of-pool policy can be overridden' );
+is( $reservation_policy_config->{Dhcp4}{'match-client-id'}, JSON::true, 'client-id lease matching policy can be overridden' );
 
 my $comment_dir = tempdir(CLEANUP => 1);
 my $commented_config = "$comment_dir/kea-dhcp4.conf";

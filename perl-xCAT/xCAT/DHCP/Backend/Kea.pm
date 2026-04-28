@@ -63,10 +63,11 @@ sub render_dhcp4_config {
             type => 'memfile',
             name => '/var/lib/kea/kea-leases4.csv',
         },
-        'valid-lifetime'            => _integer( _first_defined( $intent->{'valid-lifetime'}, $intent->{valid_lifetime}, 43200 ) ),
-        'reservations-in-subnet'    => _json_bool( _first_defined( $intent->{'reservations-in-subnet'}, $intent->{reservations_in_subnet}, 1 ) ),
-        'reservations-out-of-pool'  => _json_bool( _first_defined( $intent->{'reservations-out-of-pool'}, $intent->{reservations_out_of_pool}, 1 ) ),
-        subnet4                     => [ map { $self->_render_subnet4($_) } @{ _first_defined( $intent->{subnet4}, $intent->{subnets}, [] ) } ],
+        'valid-lifetime'           => _integer( _first_defined( $intent->{'valid-lifetime'}, $intent->{valid_lifetime}, 43200 ) ),
+        'reservations-in-subnet'   => _json_bool( _first_defined( $intent->{'reservations-in-subnet'},   $intent->{reservations_in_subnet},   1 ) ),
+        'reservations-out-of-pool' => _json_bool( _first_defined( $intent->{'reservations-out-of-pool'}, $intent->{reservations_out_of_pool}, 1 ) ),
+        'match-client-id'          => _json_bool( _first_defined( $intent->{'match-client-id'},          $intent->{match_client_id},          0 ) ),
+        subnet4                    => [ map { $self->_render_subnet4($_) } @{ _first_defined( $intent->{subnet4}, $intent->{subnets}, [] ) } ],
     );
 
     $dhcp4{'control-socket'}  = $intent->{'control-socket'}  if $intent->{'control-socket'};

@@ -23,6 +23,7 @@ BEGIN
 use lib "$::XCATROOT/lib/perl";
 use strict;
 use xCAT::Utils;
+use xCAT::SvrUtils;
 use xCAT::DHCP::Backend;
 use xCAT::NetworkUtils;
 use Getopt::Long;
@@ -1881,52 +1882,30 @@ sub setupLinuxexports
     #  add tftpboot to /etc/exports - if needed
     #
 
-    my $cmd = "/bin/cat /etc/exports | grep '$::TFTPDIR'";
-    my $outref = xCAT::Utils->runcmd("$cmd", -1);
-    if ($::RUNCMD_RC != 0)
-    {
-
-        # ok - then add this entry
-        #SECURITY: this has potential for sharing private host/user keys
-        my $cmd =
-"/bin/echo '$::TFTPDIR *(rw,no_root_squash,sync,no_subtree_check)' >> /etc/exports";
-
-        my $outref = xCAT::Utils->runcmd("$cmd", 0);
-        if ($::RUNCMD_RC != 0)
+    foreach my $exportdir ($::TFTPDIR, $::INSTALLDIR) {
+        if (!xCAT::SvrUtils->nfs_export_exists($exportdir))
         {
-            xCAT::MsgUtils->message('E',
-                "Could not update the /etc/exports file.");
+            my $cmd =
+"/bin/echo '$exportdir *(rw,no_root_squash,sync,no_subtree_check,insecure)' >> /etc/exports";
+            xCAT::Utils->runcmd("$cmd", 0);
+            if ($::RUNCMD_RC != 0)
+            {
+                xCAT::MsgUtils->message('E',
+                    "Could not update the /etc/exports file.");
+            }
+            else
+            {
+                verbose("Added $exportdir to the /etc/exports file.");
+                $changed_exports++;
+            }
         }
         else
         {
-            verbose("Added $::TFTPDIR to the /etc/exports file.");
-            $changed_exports++;
-        }
-    }
-
-    #
-    #  add /install to /etc/exports - if needed
-    #
-
-    $cmd = "/bin/cat /etc/exports | grep '$::INSTALLDIR'";
-    $outref = xCAT::Utils->runcmd("$cmd", -1);
-    if ($::RUNCMD_RC != 0)
-    {
-
-        # ok - then add this entry
-        #SECURITY: this has potential for sharing private host/user keys
-        my $cmd =
-"/bin/echo '$::INSTALLDIR *(rw,no_root_squash,sync,no_subtree_check)' >> /etc/exports";
-        my $outref = xCAT::Utils->runcmd("$cmd", 0);
-        if ($::RUNCMD_RC != 0)
-        {
-            xCAT::MsgUtils->message('E',
-                "Could not update the /etc/exports file.");
-        }
-        else
-        {
-            verbose("Added $::INSTALLDIR to the /etc/exports file.");
-            $changed_exports++;
+            if (xCAT::SvrUtils->ensure_nfs_export_option($exportdir, 'insecure'))
+            {
+                verbose("Added insecure to existing $exportdir export.");
+                $changed_exports++;
+            }
         }
     }
 
@@ -1973,8 +1952,8 @@ sub setupLinuxexports
         {
             verbose("NFS has been enabled.");
         }
-        $cmd = "/usr/sbin/exportfs -a";
-        $outref = xCAT::Utils->runcmd("$cmd", 0);
+        my $cmd = "/usr/sbin/exportfs -a";
+        my $outref = xCAT::Utils->runcmd("$cmd", 0);
         if ($::RUNCMD_RC != 0)
         {
             xCAT::MsgUtils->message('E', "Error with $cmd.");

@@ -181,9 +181,14 @@ cd /
 
 if [ -z $STATEMNT ]; then
   for lf in /tmp/dhclient.*.lease; do
+    [ -e "$lf" ] || continue
     netif=${lf#*.}
     netif=${netif%.*}
-    cp $lf  "$NEWROOT/var/lib/dhclient/dhclient-$netif.leases"
+    if [ -d "$NEWROOT/var/lib/dhclient" ]; then
+      cp $lf "$NEWROOT/var/lib/dhclient/dhclient-$netif.leases"
+    elif [ -d "$NEWROOT/var/lib/dhcp" ]; then
+      cp $lf "$NEWROOT/var/lib/dhcp/dhclient.$netif.leases"
+    fi
   done
 
   if [ ! -z "$ifname" ]; then
@@ -191,31 +196,58 @@ if [ -z $STATEMNT ]; then
     ETHX=${ifname%:$MACX*}
   elif [ ! -z "$netdev" ]; then
     ETHX=$netdev
-    MACX=`ip link show $netdev | grep ether | awk '{print $2}'`
+    if [ -e "/sys/class/net/$netdev/address" ]; then
+      MACX=$(cat /sys/class/net/$netdev/address)
+    else
+      MACX=$(ip link show $netdev 2>/dev/null | grep ether | awk '{print $2}')
+    fi
   elif [ ! -z "$BOOTIF" ]; then
-    MACX=$BOOTIF
-    #ETHX=`ifconfig |grep -i $BOOTIF | awk '{print $1}'`
-    ETHX=` ip  -oneline link show |grep -i $BOOTIF|awk -F ':' '{print $2}'|grep -o "[^ ]\+\( \+[^ ]\+\)*"`
+    MACX=$(echo $BOOTIF | sed 's/^01-//;s/-/:/g' | tr 'A-Z' 'a-z')
+    for devpath in /sys/class/net/*; do
+      [ -e "$devpath/address" ] || continue
+      if [ "$(cat $devpath/address)" = "$MACX" ]; then
+        ETHX=${devpath##*/}
+        break
+      fi
+    done
+    [ -z "$ETHX" ] && ETHX=$(ip -oneline link show | grep -i "$MACX" | awk -F ':' '{print $2}' | grep -o "[^ ]\+\( \+[^ ]\+\)*")
   fi
 
   if [ ! -z "$MACX" ] && [ ! -z "$ETHX" ]; then
-    if [ ! -e $NEWROOT/etc/sysconfig/network-scripts/ifcfg-$ETHX ]; then
-        touch $NEWROOT/etc/sysconfig/network-scripts/ifcfg-$ETHX
+    if [ -x $NEWROOT/usr/sbin/netplan ]; then
+      mkdir -p $NEWROOT/etc/netplan
+      cat > $NEWROOT/etc/netplan/90-xcat.yaml <<XCATNETPLAN
+network:
+  version: 2
+  ethernets:
+    $ETHX:
+      dhcp4: true
+      match:
+        macaddress: "$MACX"
+XCATNETPLAN
+    elif [ -d $NEWROOT/etc/sysconfig/network-scripts ]; then
+      echo "DEVICE=$ETHX" > $NEWROOT/etc/sysconfig/network-scripts/ifcfg-$ETHX
+      echo "BOOTPROTO=dhcp" >> $NEWROOT/etc/sysconfig/network-scripts/ifcfg-$ETHX
+      echo "HWADDR=$MACX" >> $NEWROOT/etc/sysconfig/network-scripts/ifcfg-$ETHX
+      echo "ONBOOT=yes" >> $NEWROOT/etc/sysconfig/network-scripts/ifcfg-$ETHX
+    elif [ -d $NEWROOT/etc/network ]; then
+      echo "auto $ETHX" >> $NEWROOT/etc/network/interfaces
+      echo "iface $ETHX inet dhcp" >> $NEWROOT/etc/network/interfaces
     fi
-    echo "DEVICE=$ETHX" > $NEWROOT/etc/sysconfig/network-scripts/ifcfg-$ETHX
-    echo "BOOTPROTO=dhcp" >> $NEWROOT/etc/sysconfig/network-scripts/ifcfg-$ETHX
-    echo "HWADDR=$MACX" >> $NEWROOT/etc/sysconfig/network-scripts/ifcfg-$ETHX
-    echo "ONBOOT=yes" >> $NEWROOT/etc/sysconfig/network-scripts/ifcfg-$ETHX
   fi
 fi
 
 cp /etc/resolv.conf "$NEWROOT/etc/"
 
+
 if [ -d "$NEWROOT/etc/sysconfig" -a ! -e "$NEWROOT/etc/sysconfig/selinux" ]; then
 	echo "SELINUX=disabled" >> "$NEWROOT/etc/sysconfig/selinux"
 fi
 
-# inject new exit_if_exists
-echo 'settle_exit_if_exists="--exit-if-exists=/dev/root"; rm "$job"' > /initqueue/xcat.sh
-# force udevsettle to break
-> /initqueue/work
+# signal dracut to proceed with switch_root
+[ -e /dev/root ] || ln -s null /dev/root
+for HDIR in "" "/lib/dracut/hooks"; do
+  [ -d "${HDIR}/initqueue" ] || continue
+  echo 'settle_exit_if_exists="--exit-if-exists=/dev/root"; rm -f -- "$job"' > ${HDIR}/initqueue/xcat.sh
+  > ${HDIR}/initqueue/work
+done

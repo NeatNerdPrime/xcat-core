@@ -10,11 +10,12 @@ wget
 rsync
 busybox-static
 gawk
-dnsutils
+bind9-dnsutils
 tar
 gzip
 xz-utils
 cpio
 chrony
+iproute2
 dracut
 dracut-network

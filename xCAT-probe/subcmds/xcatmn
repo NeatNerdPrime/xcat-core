@@ -1093,10 +1093,9 @@ sub check_dhcp_service {
                 my $snip  = xCAT::NetworkUtils->getipaddr($sntmp);
                 my $snmac = `lsdef $sntmp -i mac -c 2>&1| awk -F'=' '{print \$2}'`;
                 chomp($snmac);
-                my $tmpmac;
-                if ($tmp =~ /$sntmp: ip-address = $snip, hardware-address = (.+)/) {
-                    $tmpmac = $1;
-                    if ($tmpmac !~ $snmac) {
+                my $tmpmac = probe_utils::dhcp_query_reply_mac($tmp, $sntmp, $snip);
+                if (defined($tmpmac)) {
+                    if (lc($tmpmac) ne lc($snmac)) {
                         push @$error_ref, "DHCP server reply is wrong";
                         returncmdoutput($tmp, $error_ref) if ($verbose);
                         $rc = 1;
@@ -1107,6 +1106,10 @@ sub check_dhcp_service {
                     $rc = 1;
                 }
             } else {
+
+                # Clean up any leftover test node from a previous failed run
+                `makedhcp -d xcatmntest 2>&1`;
+                `rmdef xcatmntest 2>&1`;
 
                 my $tmp = `chdef xcatmntest groups=all ip=$serverip  mac=aa:aa:aa:aa:aa:aa 2>&1`;
                 if ($?) {
@@ -1121,7 +1124,7 @@ sub check_dhcp_service {
                 `cp /etc/hosts /etc/hosts.bak.probe > /dev/null 2>&1`;
 
                 open HOSTFILE, ">> /etc/hosts";
-                print HOSTFILE "$serverip xcatmntest xcatmntest.$domain";
+                print HOSTFILE "$serverip xcatmntest xcatmntest.$domain\n";
                 close HOSTFILE;
 
                 probe_utils->send_msg($outputtarget, "d", "To do 'makedhcp xcatmntest'") if ($verbose);
@@ -1130,40 +1133,45 @@ sub check_dhcp_service {
                     push @$error_ref, "makedhcp xcatmntest failed";
                     returncmdoutput($tmp, $error_ref) if ($verbose);
                     $rc = 1;
+                    `makedhcp -d xcatmntest 2>&1`;
                     `rmdef xcatmntest 2>&1`;
+                    if (-f "/etc/hosts.bak.probe") {
+                        unlink "/etc/hosts";
+                        move("/etc/hosts.bak.probe", "/etc/hosts");
+                    }
                     last;
                 }
+
+                # Allow DHCP server time to commit the OMAPI-added entry
+                sleep 1;
 
                 $tmp = `makedhcp -q  xcatmntest 2>&1`;
                 if ($?) {
                     push @$error_ref, "makedhcp -q xcatmntest failed";
                     returncmdoutput($tmp, $error_ref) if ($verbose);
                     $rc = 1;
-                    `makedhcp -d xcatmntest 2>&1 && rmdef xcatmntest 2>&1`;
-                    last;
                 }
-                chomp($tmp);
-                if (length($tmp) == 0) {
-                    # makedhcp -q did not return anything, and RC was 0
+                chomp($tmp) if defined($tmp);
+                if (!$rc && length($tmp) == 0) {
                     push @$error_ref, "DHCP server returned no data for 'makedhcp -q xcatmntest'";
                     returncmdoutput($tmp, $error_ref) if ($verbose);
                     $rc = 1;
-                    last;
                 }
-                if ($tmp !~ /xcatmntest: ip-address = $serverip, hardware-address = aa:aa:aa:aa:aa:aa/) {
+                if (!$rc && !probe_utils::dhcp_query_reply_matches($tmp, 'xcatmntest', $serverip, 'aa:aa:aa:aa:aa:aa')) {
                     push @$error_ref, "DHCP server reply does not match expected IP and MAC";
                     returncmdoutput($tmp, $error_ref) if ($verbose);
                     $rc = 1;
-                    `makedhcp -d xcatmntest 2>&1 &&  rmdef xcatmntest 2>&1`;
-                    last;
                 }
 
+                # Always clean up the test node regardless of success or failure
                 push @$error_ref, "Start clearing simulation information for dhcp test" if ($verbose);
-                $tmp = `makedhcp -d xcatmntest 2>&1 &&  rmdef xcatmntest 2>&1`;
+                $tmp = `makedhcp -d xcatmntest 2>&1 && rmdef xcatmntest 2>&1`;
                 returncmdoutput($tmp, $error_ref) if ($verbose);
 
-                unlink "/etc/hosts";
-                move("/etc/hosts.bak.probe", "/etc/hosts");
+                if (-f "/etc/hosts.bak.probe") {
+                    unlink "/etc/hosts";
+                    move("/etc/hosts.bak.probe", "/etc/hosts");
+                }
             }
         }
         if ($rc) {
@@ -1489,8 +1497,6 @@ if ($hierarchy_instance->destory(\@error)) {
 $rst = summary_all_jobs_output();
 
 exit $rst;
-
-
 
 
 
