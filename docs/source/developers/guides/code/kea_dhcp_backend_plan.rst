@@ -7,7 +7,7 @@ Purpose
 xCAT currently integrates DHCP through ISC DHCP. That behavior should remain the
 default on platforms where ISC DHCP is still available and supported. Kea DHCP
 will be added as a second backend for platforms that need it, starting with EL10
-and Ubuntu 24.04.
+and Ubuntu 22.04.
 
 The public xCAT contract remains ``makedhcp``. The implementation underneath
 ``makedhcp`` will select an ISC or Kea backend based on site configuration and
@@ -20,7 +20,7 @@ The ``kea-dhcp-backend`` work implements the Kea backend foundation:
 
 * backend selection through ``site.dhcpbackend``
 * ISC as the preserved default on platforms that still support it
-* Kea as the automatic default for EL10 and Ubuntu 24.04+
+* Kea as the automatic default for EL10 and Ubuntu 22.04+
 * Kea DHCPv4 and DHCPv6 JSON rendering with Perl's ``JSON`` module
 * Kea DHCPv4, DHCPv6, Control Agent, and DHCP-DDNS configuration validation
   before install
@@ -46,7 +46,7 @@ Remaining work is validation and hardening:
 * full PXE boot validation on real hardware or nested guests for every
   supported architecture
 * complete service-node and disjoint-DHCP scenario validation
-* CI integration for EL10 and Ubuntu 24.04 containers
+* CI integration for EL10 and Ubuntu 22.04+ containers
 
 Backend Selection
 -----------------
@@ -58,8 +58,8 @@ Add a site attribute:
 Selection rules:
 
 * ``auto`` keeps ISC DHCP on existing supported platforms such as EL8, EL9,
-  older Ubuntu/Debian releases, and SLES.
-* ``auto`` selects Kea DHCP on EL10 and Ubuntu 24.04.
+  Ubuntu 20.04 and older Ubuntu/Debian releases, and SLES.
+* ``auto`` selects Kea DHCP on EL10 and Ubuntu 22.04+.
 * ``isc`` forces the ISC backend.
 * ``kea`` forces the Kea backend.
 * A forced backend that is unavailable must fail with a clear error.
@@ -159,10 +159,10 @@ ISC services:
 
 Kea services:
 
-* ``kea-dhcp4``
-* optional ``kea-dhcp6``
+* ``kea-dhcp4`` or Debian-style ``kea-dhcp4-server``
+* optional ``kea-dhcp6`` or Debian-style ``kea-dhcp6-server``
 * optional ``kea-ctrl-agent``
-* optional ``kea-dhcp-ddns``
+* optional ``kea-dhcp-ddns`` or Debian-style ``kea-dhcp-ddns-server``
 
 Control Agent must be running before REST operations are attempted. D2 should
 only be managed when Kea DDNS support is configured.
@@ -187,7 +187,8 @@ Backends render the same intent as:
 Boot coverage must include:
 
 * x86 BIOS
-* x86_64 UEFI
+* x86_64 UEFI PXE architecture ids ``0x0007`` and ``0x0009``
+* x86_64 UEFI HTTP boot architecture id ``0x0010``
 * ARM64
 * OpenPOWER/OPAL
 * ONIE
@@ -205,10 +206,28 @@ Baseline Kea behavior should be deterministic and not depend on optional hooks:
 * validate generated configuration
 * reload Kea
 
+Kea reservation policy must map xCAT's existing ``makedhcp`` semantics
+explicitly:
+
+* ``networks.dynamicrange`` renders as Kea dynamic address pools.
+* Node addresses outside ``networks.dynamicrange`` render as static
+  ``ip-address`` host reservations.
+* Node addresses inside ``networks.dynamicrange`` are currently treated as
+  dynamic by ``makedhcp`` and do not render fixed ``ip-address`` reservations;
+  enabling in-pool fixed reservations is a separate behavior change that needs
+  explicit live validation.
+* DHCPv4 output should keep Kea subnet host reservations enabled with
+  ``reservations-in-subnet`` set to ``true`` and should not switch globally to
+  out-of-pool-only mode unless all fixed reservations are known to be outside
+  dynamic pools.
+* In hierarchical deployments, ``networks.dhcpserver`` ownership must be
+  honored before rendering ``networks.dynamicrange`` as Kea pools, matching
+  the legacy ISC behavior that prevents duplicate dynamic leases.
+
 Optimized behavior can use Kea Control Agent plus host-commands when available.
 This requires verifying that the target distribution packages include the host
 commands hook library, such as ``libdhcp_host_cmds.so``. Do not assume this
-library is present in EL10 or Ubuntu 24.04 without testing the actual packages.
+library is present in EL10 or Ubuntu 22.04+ without testing the actual packages.
 
 If host-commands are unavailable, the JSON render and reload path must still
 work.
@@ -240,7 +259,7 @@ dependencies only for platforms using Kea.
 Known areas:
 
 * ``xCAT.spec`` and ``xCATsn.spec`` currently depend on ``/usr/sbin/dhcpd``.
-* EL10 and Ubuntu 24.04 packaging should depend on the correct Kea server
+* EL10 and Ubuntu 22.04+ packaging should depend on the correct Kea server
   packages.
 * ``dhclient`` and ``dhcp-client`` are separate client-side genesis/netboot
   issues and should not be conflated with the server backend.
@@ -270,6 +289,8 @@ Unit tests:
 * Kea JSON renderer coverage
 * host reservation formatting
 * subnet and pool mapping
+* Kea reservation policy flags for subnet reservations and out-of-pool-only
+  overrides
 * backend selection and override behavior
 
 Configuration validation tests:
@@ -287,8 +308,9 @@ Configuration validation tests:
 Backend selection tests:
 
 * ``auto`` uses ISC on EL9
+* ``auto`` uses ISC on Ubuntu 20.04
 * ``auto`` uses Kea on EL10
-* ``auto`` uses Kea on Ubuntu 24.04
+* ``auto`` uses Kea on Ubuntu 22.04 and Ubuntu 24.04
 * forced ``kea`` works on EL9 when Kea packages are installed
 * forced unavailable backend fails clearly
 
@@ -297,6 +319,7 @@ Integration matrix:
 * EL9 plus ISC
 * EL9 plus forced Kea
 * EL10 plus Kea
+* Ubuntu 22.04 plus Kea
 * Ubuntu 24.04 plus Kea
 
 Semantic parity tests:
@@ -315,6 +338,8 @@ Functional smoke tests:
 * ``XCAT_KEA_LIVE_SMOKE=1`` validates live Control Agent host-commands when
   Kea and the host-commands hook are installed
 * DHCP offers contain expected boot options
+* Kea static reservations outside dynamic pools allocate without
+  ``ALLOC_FAIL_NO_POOLS``
 * real PXE boot behavior is validated for each supported architecture
 
 Test Infrastructure
@@ -328,7 +353,7 @@ ordinary containers.
 Open test infrastructure details to confirm:
 
 * SSH access method and user for ``rome01.local.versatushpc.com.br``
-* available base images for EL9, EL10, and Ubuntu 24.04
+* available base images for EL9, EL10, Ubuntu 22.04, and Ubuntu 24.04
 * libvirt network names and whether isolated DHCP test networks are already
   available
 * whether nested or privileged test guests can run DHCP client and PXE tests
@@ -339,21 +364,26 @@ Open test infrastructure details to confirm:
 Manual Validation Snapshot
 --------------------------
 
-As of April 23, 2026, the branch has been exercised on KVM guests across ISC
+As of April 26, 2026, the branch has been exercised on KVM guests across ISC
 and Kea backends:
 
 * EL10 plus Kea on x86_64: passed end-to-end xNBA netboot with a Rocky 10.1
   compute image. The node fetched the xNBA script, kernel, initrd, and rootimg,
   then reached xCAT ``netbooting`` state.
-* Ubuntu 24.04 plus Kea on x86_64: passed xNBA shell boot and full netboot
-  image fetch. The node downloaded the node script, Genesis artifacts, and the
-  generated root image, and Kea reservation queries succeeded.
+* Ubuntu 24.04 plus Kea on x86_64: passed BIOS and non-Secure-Boot UEFI xNBA
+  shell boot and full stateless compute-image boot. The nodes downloaded the
+  node script, kernel, initrd, and generated root image, then reached ``sshd``.
+  Kea allocated static reservations outside ``networks.dynamicrange`` without
+  ``ALLOC_FAIL_NO_POOLS``. The KVM osimage used ``netdrivers=overlay`` because
+  ``virtio_net`` is built into the Ubuntu 24.04 generic kernel.
 * EL9 plus ISC on x86_64: passed legacy ISC plus xNBA shell boot, including
   DHCP, TFTP, node-script handoff, and Genesis fetch.
-* Ubuntu 22.04 plus ISC on x86_64: passed legacy ISC DHCP, TFTP, generated
+* Ubuntu 22.04 plus forced ISC on x86_64: passed legacy ISC DHCP, TFTP, generated
   xNBA network script, and Genesis fetch. Per-node OMAPI reservation updates on
   Jammy still fail with ``omshell`` descriptor errors and appear to be a
-  preexisting Ubuntu-specific ISC issue outside the Kea scope.
+  preexisting Ubuntu-specific ISC issue outside the Kea scope. Because of that
+  issue, ``site.dhcpbackend=auto`` now selects Kea on Ubuntu 22.04 and newer
+  Ubuntu releases.
 * EL10 plus Kea on ppc64le: passed Kea 3.x renderer validation with
   ``evaluate-additional-classes`` and ``only-in-additional-list``; passed
   ``kea-dhcp4 -t``; passed the full DHCP unit suite on ppc64le after installing
@@ -392,5 +422,6 @@ Guiding Rule
 ------------
 
 ``makedhcp`` remains the stable xCAT interface. ISC remains the default backend
-where it works. Kea is added as a backend for platforms that need it, with shared
-DHCP intent and backend-specific rendering and control.
+where it works and remains supported. Kea is added as a backend for platforms
+that need it, with shared DHCP intent and backend-specific rendering and
+control.

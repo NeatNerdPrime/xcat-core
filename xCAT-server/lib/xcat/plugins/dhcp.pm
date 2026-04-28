@@ -2359,9 +2359,6 @@ sub kea_build_dhcp4_intent
     %netcfgs       = ();
     @alldomains    = ();
 
-    my @interfaces = grep { $_ ne '!remote!' && $_ !~ /!remote!/ } sort keys %$activenics;
-    @interfaces = ('*') unless @interfaces;
-
     my $httpport = "80";
     my @hports = xCAT::TableUtils->get_site_attribute("httpport");
     if ($hports[0]) {
@@ -2387,6 +2384,23 @@ sub kea_build_dhcp4_intent
     }
 
     my @routes = kea_ipv4_routes(@vnets);
+    my %dhcp_interfaces = %$activenics;
+    if (!keys %dhcp_interfaces) {
+        my %configured_local_interfaces = map { $_->{mgtifname} => 1 } grep { $_->{mgtifname} && $_->{mgtifname} !~ /!remote!/ } @vnets;
+        foreach my $route (@routes) {
+            my ( $net, $netif, undef, $flags ) = @$route;
+            next if kea_skip_ipv4_network($net);
+            next if defined($flags) && $flags =~ /G/;
+            next if $netif =~ /!remote!/;
+            $dhcp_interfaces{$netif} = 1 if $configured_local_interfaces{$netif};
+        }
+    }
+
+    my @interfaces = grep { $_ ne '!remote!' && $_ !~ /!remote!/ } sort keys %dhcp_interfaces;
+    if (!@interfaces && !$dhcp_interfaces{'!remote!'}) {
+        return { error => "Unable to infer local Kea DHCP interfaces. Set site.dhcpinterfaces to the intended provisioning interface." };
+    }
+
     my @subnets;
     my @opal_classes;
     my $id = 1;
@@ -2400,9 +2414,9 @@ sub kea_build_dhcp4_intent
         if ($interface =~ /!remote!\S*/) {
             $remote = 1;
             $interface =~ s/!remote!\s*(.*)$/$1/;
-            next unless $activenics->{'!remote!'};
+            next unless $dhcp_interfaces{'!remote!'};
         } else {
-            next unless $activenics->{$interface};
+            next unless $dhcp_interfaces{$interface};
         }
 
         my $subnet = kea_subnet4_intent($nettab, $net, $mask, $interface, $remote, $id, $httpport);
@@ -2767,11 +2781,16 @@ sub kea_subnet4_intent
     push @option_data, { name => 'domain-search', data => $domainstring } if $domainstring;
 
     my $prefix = kea_mask_to_prefix($mask);
+    my $dynamicrange = $ent ? $ent->{dynamicrange} : undef;
+    if ( $dynamicrange && $ent->{dhcpserver} && xCAT::NetworkUtils->thishostisnot( $ent->{dhcpserver} ) ) {
+        $dynamicrange = undef;
+    }
+
     my $opal_class = kea_opal_client_class($net, $prefix, $tftp, $httpport);
     my %subnet = (
         id            => $id,
         subnet        => "$net/$prefix",
-        dynamicrange  => $ent ? $ent->{dynamicrange} : undef,
+        dynamicrange  => $dynamicrange,
         option_data   => \@option_data,
         next_server   => $tftp,
     );

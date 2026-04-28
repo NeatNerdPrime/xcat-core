@@ -10,6 +10,13 @@ use Math::BigInt;
 use xCAT::DHCP::Range;
 use xCAT::NetworkUtils;
 
+my %KEA_SERVICE_CANDIDATES = (
+    'kea-dhcp4'      => [ 'kea-dhcp4',      'kea-dhcp4-server' ],
+    'kea-dhcp6'      => [ 'kea-dhcp6',      'kea-dhcp6-server' ],
+    'kea-dhcp-ddns'  => [ 'kea-dhcp-ddns',  'kea-dhcp-ddns-server' ],
+    'kea-ctrl-agent' => [ 'kea-ctrl-agent' ],
+);
+
 sub new {
     my ( $class, %args ) = @_;
     return bless \%args, $class;
@@ -56,8 +63,10 @@ sub render_dhcp4_config {
             type => 'memfile',
             name => '/var/lib/kea/kea-leases4.csv',
         },
-        'valid-lifetime' => _integer( _first_defined( $intent->{'valid-lifetime'}, $intent->{valid_lifetime}, 43200 ) ),
-        subnet4          => [ map { $self->_render_subnet4($_) } @{ _first_defined( $intent->{subnet4}, $intent->{subnets}, [] ) } ],
+        'valid-lifetime'            => _integer( _first_defined( $intent->{'valid-lifetime'}, $intent->{valid_lifetime}, 43200 ) ),
+        'reservations-in-subnet'    => _json_bool( _first_defined( $intent->{'reservations-in-subnet'}, $intent->{reservations_in_subnet}, 1 ) ),
+        'reservations-out-of-pool'  => _json_bool( _first_defined( $intent->{'reservations-out-of-pool'}, $intent->{reservations_out_of_pool}, 1 ) ),
+        subnet4                     => [ map { $self->_render_subnet4($_) } @{ _first_defined( $intent->{subnet4}, $intent->{subnets}, [] ) } ],
     );
 
     $dhcp4{'control-socket'}  = $intent->{'control-socket'}  if $intent->{'control-socket'};
@@ -434,16 +443,19 @@ sub restart_services {
     push @services, 'kea-dhcp6'       if $opts{ipv6};
     push @services, 'kea-ctrl-agent'  if $opts{ctrl_agent};
 
+    my @units;
     foreach my $service (@services) {
+        my $unit = $self->_kea_service($service);
+        push @units, $unit;
         if ( $opts{enable} ) {
-            my $enable_ret = xCAT::Utils->enableservice($service);
-            return { error => "Failed to enable $service." } if $enable_ret != 0;
+            my $enable_ret = xCAT::Utils->enableservice($unit);
+            return { error => "Failed to enable $unit." } if $enable_ret != 0;
         }
-        my $ret = xCAT::Utils->restartservice($service);
-        return { error => "Failed to restart $service." } if $ret != 0;
+        my $ret = xCAT::Utils->restartservice($unit);
+        return { error => "Failed to restart $unit." } if $ret != 0;
     }
 
-    return { services => \@services };
+    return { services => \@units };
 }
 
 sub check_services {
@@ -454,12 +466,15 @@ sub check_services {
     my @services = ('kea-dhcp4');
     push @services, 'kea-dhcp6' if $opts{ipv6};
 
+    my @units;
     foreach my $service (@services) {
-        my $ret = xCAT::Utils->checkservicestatus($service);
-        return { error => "$service is not running. Please start the Kea DHCP service." } if $ret != 0;
+        my $unit = $self->_kea_service($service);
+        push @units, $unit;
+        my $ret = xCAT::Utils->checkservicestatus($unit);
+        return { error => "$unit is not running. Please start the Kea DHCP service." } if $ret != 0;
     }
 
-    return { services => \@services };
+    return { services => \@units };
 }
 
 sub upsert_reservations {
@@ -867,6 +882,13 @@ sub _integer {
     return 0 + $value;
 }
 
+sub _json_bool {
+    my ($value) = @_;
+
+    return $value if ref($value) eq 'JSON::PP::Boolean' || ref($value) eq 'JSON::Boolean';
+    return $value ? JSON::true : JSON::false;
+}
+
 sub _set_config_permissions {
     my ($path) = @_;
 
@@ -893,6 +915,41 @@ sub _kea_group {
     }
 
     return;
+}
+
+sub _kea_service {
+    my ( $self, $service ) = @_;
+
+    # Kea service names are package-specific, not strictly distribution-specific.
+    # Prefer the unit that is actually installed so derivatives, backports, and
+    # locally rebuilt packages do not need a distro/version decision tree here.
+    foreach my $candidate ( @{ $KEA_SERVICE_CANDIDATES{$service} || [$service] } ) {
+        return $candidate if $self->_service_available($candidate);
+    }
+
+    return $service;
+}
+
+sub _service_available {
+    my ( $self, $service ) = @_;
+
+    my $unit = "$service.service";
+    foreach my $dir ( @{ $self->{service_unit_dirs} || _systemd_unit_dirs() } ) {
+        return 1 if -e "$dir/$unit";
+    }
+
+    return 1 if -x "/etc/init.d/$service";
+
+    return 0;
+}
+
+sub _systemd_unit_dirs {
+    return [
+        '/etc/systemd/system',
+        '/run/systemd/system',
+        '/usr/lib/systemd/system',
+        '/lib/systemd/system',
+    ];
 }
 
 sub _command_path {

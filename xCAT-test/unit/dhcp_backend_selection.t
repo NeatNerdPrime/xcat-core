@@ -45,14 +45,32 @@ is(
 
 is(
     xCAT::DHCP::Backend->default_backend( platform => '', os => 'ubuntu22.04', os_name => 'ubuntu', version => '22.04' ),
+    'kea',
+    'Ubuntu 22.04 defaults to Kea'
+);
+
+is(
+    xCAT::DHCP::Backend->default_backend( platform => '', os => 'ubuntu20.04', os_name => 'ubuntu', version => '20.04' ),
     'isc',
-    'Ubuntu 22.04 defaults to ISC'
+    'Ubuntu 20.04 defaults to ISC'
 );
 
 is(
     xCAT::DHCP::Backend->default_backend( platform => '', os => 'ubuntu24.04', os_name => 'ubuntu', version => '24.04' ),
     'kea',
     'Ubuntu 24.04 defaults to Kea'
+);
+
+is(
+    xCAT::DHCP::Backend->default_backend( platform => '', os => 'ubuntu24.04', os_name => 'ubuntu', version => '24.04.4' ),
+    'kea',
+    'Ubuntu 24.04 point releases default to Kea'
+);
+
+is(
+    xCAT::DHCP::Backend->default_backend( platform => '', os => 'ubuntu24.04', os_name => 'ubuntu', version => '24' ),
+    'isc',
+    'Ubuntu major-only version is not treated as a date-based release'
 );
 
 is(
@@ -95,6 +113,12 @@ is(
     xCAT::DHCP::Backend->choose( requested => 'auto', os => 'ubuntu24.04', os_name => 'ubuntu', version => '24.04' )->{name},
     'kea',
     'auto selects Kea on Ubuntu 24.04'
+);
+
+is(
+    xCAT::DHCP::Backend->choose( requested => 'auto', os => 'ubuntu22.04', os_name => 'ubuntu', version => '22.04' )->{name},
+    'kea',
+    'auto selects Kea on Ubuntu 22.04'
 );
 
 like(

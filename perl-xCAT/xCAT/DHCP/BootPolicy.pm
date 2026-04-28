@@ -7,6 +7,7 @@ sub kea_client_classes {
     my ( $class, %opts ) = @_;
 
     my $xnba_user_class = xnba_user_class_test();
+    my $uefi_x64_arch_match = uefi_x64_client_architecture_match_expr();
     my $bios_boot = $opts{xnba_kpxe} ? 'xcat/xnba.kpxe' : 'pxelinux.0';
     my $uefi_boot = $opts{xnba_efi}  ? 'xcat/xnba.efi'  : '';
     my @classes;
@@ -24,7 +25,7 @@ sub kea_client_classes {
     if ($uefi_boot ne '') {
         push @classes, {
             name             => 'xcat-uefi-x64',
-            test             => "(option[93].hex == 0x0007 or option[93].hex == 0x0009) and not ($xnba_user_class)",
+            test             => "($uefi_x64_arch_match) and not ($xnba_user_class)",
             'boot-file-name' => $uefi_boot,
         };
     }
@@ -55,6 +56,7 @@ sub kea_xnba_node_classes {
 
     my $nodes = $opts{nodes} || [];
     my $xnba_user_class = xnba_user_class_test();
+    my $uefi_x64_arch_match = uefi_x64_client_architecture_match_expr();
     my @classes;
 
     foreach my $node (@$nodes) {
@@ -73,7 +75,7 @@ sub kea_xnba_node_classes {
         if ( $opts{xnba_efi} ) {
             push @classes, {
                 name             => "$class_base-uefi",
-                test             => "$xnba_user_class and option[93].hex == 0x0009 and $mac_test",
+                test             => "$xnba_user_class and ($uefi_x64_arch_match) and $mac_test",
                 'boot-file-name' => "$base_url.uefi",
                 'user-context'   => _xnba_user_context($node),
             };
@@ -85,6 +87,10 @@ sub kea_xnba_node_classes {
 
 sub xnba_user_class_test {
     return "(option[77].exists and (option[77].text == 'xNBA' or option[77].hex == 0x784e4241 or substring(option[77].hex,1,4) == 'xNBA'))";
+}
+
+sub uefi_x64_client_architecture_match_expr {
+    return "option[93].hex == 0x0007 or option[93].hex == 0x0009 or option[93].hex == 0x0010";
 }
 
 sub _xnba_class_base {

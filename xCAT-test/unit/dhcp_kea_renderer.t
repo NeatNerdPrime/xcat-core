@@ -11,6 +11,21 @@ use Test::More;
 use xCAT::DHCP::Backend::Kea;
 
 my $backend = xCAT::DHCP::Backend::Kea->new( kea_version => '2.4.1' );
+my $unit_dir = tempdir( CLEANUP => 1 );
+foreach my $unit (qw/kea-dhcp4-server.service kea-dhcp6-server.service kea-dhcp-ddns-server.service kea-ctrl-agent.service/) {
+    open( my $unit_fh, '>', "$unit_dir/$unit" ) or die "Unable to write $unit_dir/$unit: $!";
+    close($unit_fh);
+}
+my $service_backend = xCAT::DHCP::Backend::Kea->new( service_unit_dirs => [$unit_dir] );
+is( $service_backend->_kea_service('kea-dhcp4'),      'kea-dhcp4-server',      'Debian-style DHCPv4 service name is detected' );
+is( $service_backend->_kea_service('kea-dhcp6'),      'kea-dhcp6-server',      'Debian-style DHCPv6 service name is detected' );
+is( $service_backend->_kea_service('kea-dhcp-ddns'),  'kea-dhcp-ddns-server',  'Debian-style DHCP-DDNS service name is detected' );
+is( $service_backend->_kea_service('kea-ctrl-agent'), 'kea-ctrl-agent',        'control agent service keeps canonical name' );
+
+open( my $canonical_unit_fh, '>', "$unit_dir/kea-dhcp4.service" ) or die "Unable to write canonical Kea unit: $!";
+close($canonical_unit_fh);
+is( $service_backend->_kea_service('kea-dhcp4'), 'kea-dhcp4', 'canonical Kea service name is preferred when present' );
+
 my $json = $backend->render_dhcp4_config(
     {
         interfaces     => ['eth0'],
@@ -60,6 +75,8 @@ ok( $config->{Dhcp4}, 'renderer creates a Dhcp4 document' );
 is_deeply( $config->{Dhcp4}{'interfaces-config'}{interfaces}, ['eth0'], 'interfaces are rendered' );
 is( $config->{Dhcp4}{'valid-lifetime'}, 600, 'valid lifetime is rendered' );
 is( $config->{Dhcp4}{'lease-database'}{type}, 'memfile', 'memfile lease backend is the default' );
+is( $config->{Dhcp4}{'reservations-in-subnet'}, JSON::true, 'subnet host reservations are enabled by default' );
+is( $config->{Dhcp4}{'reservations-out-of-pool'}, JSON::true, 'out-of-pool host reservations are enabled by default' );
 
 my $subnet = $config->{Dhcp4}{subnet4}[0];
 is( $subnet->{id}, 1, 'subnet id is rendered' );
@@ -172,6 +189,23 @@ my $empty_boot_subnet = decode_json($empty_boot_json)->{Dhcp4}{subnet4}[0];
 is( $empty_boot_subnet->{'next-server'}, '0.0.0.0', 'false-looking next-server value is preserved' );
 is( $empty_boot_subnet->{'boot-file-name'}, '', 'empty boot-file-name is preserved' );
 
+my $reservation_policy_json = $backend->render_dhcp4_config(
+    {
+        'reservations-in-subnet'   => 1,
+        'reservations-out-of-pool' => 1,
+        subnets => [
+            {
+                id     => 9,
+                subnet => '10.0.9.0/24',
+                pools  => [],
+            },
+        ],
+    }
+);
+my $reservation_policy_config = decode_json($reservation_policy_json);
+is( $reservation_policy_config->{Dhcp4}{'reservations-in-subnet'}, JSON::true, 'reservation in-subnet policy can be overridden' );
+is( $reservation_policy_config->{Dhcp4}{'reservations-out-of-pool'}, JSON::true, 'reservation out-of-pool policy can be overridden' );
+
 my $comment_dir = tempdir(CLEANUP => 1);
 my $commented_config = "$comment_dir/kea-dhcp4.conf";
 my $commented_content = <<'COMMENTED_JSON';
@@ -222,6 +256,7 @@ $backend->upsert_reservations(
     ]
 );
 is( scalar @{ $reservation_config->{Dhcp4}{subnet4}[0]{reservations} }, 1, 'reservation is added to matching subnet' );
+is_deeply( $reservation_config->{Dhcp4}{subnet4}[0]{pools}, [], 'out-of-pool static reservation does not require a dynamic pool' );
 
 $backend->upsert_reservations(
     $reservation_config,
