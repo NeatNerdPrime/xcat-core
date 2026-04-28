@@ -47,7 +47,12 @@ BEGIN {
     $INC{'xCAT/NodeRange.pm'} = __FILE__;
 }
 
-require "$FindBin::Bin/../../xCAT-server/lib/xcat/plugins/dhcp.pm";
+my $source_dhcp_plugin = "$FindBin::Bin/../../xCAT-server/lib/xcat/plugins/dhcp.pm";
+if ( -f $source_dhcp_plugin ) {
+    require $source_dhcp_plugin;
+} else {
+    require xCAT_plugin::dhcp;
+}
 
 {
     package DHCPKeaIntentNetTable;

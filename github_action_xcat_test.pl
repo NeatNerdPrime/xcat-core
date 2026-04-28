@@ -469,7 +469,7 @@ sub run_fast_regression_test{
     system "sudo touch $conf_file";
     system "sudo chmod 777 $conf_file";
     open(my $fh, '>', $conf_file) or die "Could not open test configuration file $!";
-    print $fh "[System]\nMN=$hostname\n[Table_site]\nkey=domain\nvalue=pok.stglabs.ibm.com\n";
+    print $fh "[System]\nMN=$hostname\n[Table_site]\nkey=domain\nvalue=pok.stglabs.ibm.com\nkey=dhcpbackend\nvalue=isc\n";
     close($fh);
 
     print "Dumper regression conf file:\n";
