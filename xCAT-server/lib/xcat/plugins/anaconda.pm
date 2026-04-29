@@ -2105,6 +2105,12 @@ sub copycd
             else {
                 $distname = "rhels" . $rhel_version[-1];
             }
+            # Strip the "alternate" suffix from RHEL distnames.
+            # RHEL 7 used "alternate" for ppc64le ISOs, but the architecture
+            # is already encoded in the path (ppc64le vs ppc64), so the suffix
+            # is redundant and causes mismatches with osver() detection.
+            $distname =~ s/-alternate$//;
+
             open($dinfo, $mntpath . "/.treeinfo");
             while (<$dinfo>) {
                 chomp($_);
