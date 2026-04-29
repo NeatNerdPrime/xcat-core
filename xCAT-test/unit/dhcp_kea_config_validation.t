@@ -42,7 +42,7 @@ my $json = $backend->render_dhcp4_config(
             },
             {
                 name             => 'xcat-uefi-x64',
-                test             => "(option[93].hex == 0x0007 or option[93].hex == 0x0009) and not ((option[77].exists and (option[77].text == 'xNBA' or option[77].hex == 0x784e4241 or substring(option[77].hex,1,4) == 'xNBA')))",
+                test             => "(option[93].hex == 0x0007 or option[93].hex == 0x0009 or option[93].hex == 0x0010) and not ((option[77].exists and (option[77].text == 'xNBA' or option[77].hex == 0x784e4241 or substring(option[77].hex,1,4) == 'xNBA')))",
                 'boot-file-name' => 'xcat/xnba.efi',
             },
         ],
@@ -79,6 +79,18 @@ my $json = $backend->render_dhcp4_config(
                         'next-server'   => '192.168.122.1',
                         'boot-file-name' => 'pxelinux.0',
                         'option-data'   => [ { name => 'host-name', data => 'node01' } ],
+                    },
+                ],
+            },
+            {
+                id     => 2,
+                subnet => '192.168.123.0/24',
+                pools  => [],
+                reservations => [
+                    {
+                        'hw-address' => '52:54:00:65:43:21',
+                        'ip-address' => '192.168.123.50',
+                        hostname     => 'node02',
                     },
                 ],
             },

@@ -59,7 +59,7 @@ sub default_backend {
 
     my $os_name = exists $args{os_name} ? $args{os_name} : $class->_osver('os');
     my $version = exists $args{version} ? $args{version} : $class->_osver('version');
-    if ( defined($os_name) && $os_name =~ /^ubuntu$/i && _version_at_least( $version, '24.04' ) ) {
+    if ( defined($os_name) && $os_name =~ /^ubuntu$/i && _version_at_least( $version, '22.04' ) ) {
         return 'kea';
     }
 
@@ -156,7 +156,7 @@ sub _command_exists {
 sub _version_at_least {
     my ( $version, $minimum ) = @_;
 
-    return 0 unless defined($version) && $version =~ /^\d+(?:\.\d+)*/;
+    return 0 unless defined($version) && $version =~ /^\d+\.\d+(?:\.\d+)*$/;
 
     my @version_parts = split /\./, $version;
     my @minimum_parts = split /\./, $minimum;

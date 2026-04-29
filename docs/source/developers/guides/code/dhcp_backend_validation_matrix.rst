@@ -15,13 +15,37 @@ Use this matrix for:
 * DDNS and service-management changes
 * PXE, xNBA, or boot-policy changes
 
+Acceptance Scope
+----------------
+
+The validation result for this matrix is scoped to DHCP backend behavior and
+boot handoff:
+
+* backend selection matches the platform policy
+* generated backend configuration validates with the backend-native validator
+* static reservations allocate correctly, including Kea reservations outside
+  ``networks.dynamicrange``
+* dynamic pools are emitted only by the DHCP server that owns the network
+* the expected bootloader, node script, kernel, initrd, or root image artifacts
+  are offered and fetched for the row under test
+* shell-oriented rows reach the expected xNBA or Genesis shell state
+
+Failures after the expected boot artifacts have been delivered are image,
+initrd, kernel, userspace, or packaging follow-up work. They must be tracked,
+but they do not turn the DHCP backend acceptance row red unless the failure is
+caused by DHCP policy, allocation, or boot option rendering.
+
+Secure Boot is not part of this matrix. Secure OVMF builds such as
+``OVMF_CODE.secboot.fd`` and ``OVMF_VARS.secboot.fd`` must be treated as
+unsupported unless xCAT explicitly adds Secure Boot support.
+
 Backend Policy
 --------------
 
 The default backend split is:
 
-* EL9, Ubuntu 22.04 LTS, and older supported releases: ``ISC DHCP``
-* EL10, Ubuntu 24.04 LTS, and newer supported releases: ``Kea``
+* EL9, Ubuntu 20.04 LTS, and older supported releases: ``ISC DHCP``
+* EL10, Ubuntu 22.04 LTS, and newer supported releases: ``Kea``
 
 ``site.dhcpbackend=auto`` must follow that rule. Explicit ``isc`` and ``kea``
 overrides remain available for development and troubleshooting.
@@ -40,6 +64,8 @@ Run these checks for every DHCP backend change before live validation:
     ``require-client-classes``
   * Kea 3.x output must use ``only-in-additional-list`` and
     ``evaluate-additional-classes``
+  * Kea UEFI x86_64 boot classes must cover PXE architecture ids ``0x0007``
+    and ``0x0009`` plus UEFI HTTP boot architecture id ``0x0010``
 
 * backend-native configuration validation:
 
@@ -69,26 +95,100 @@ The following matrix is the default live validation gate for DHCP backend work.
      - ``xNBA shell``
      - ``makedhcp -n``; ``dhcpd -t``; reservation add/query/delete; DHCP/TFTP;
        node-specific xNBA handoff; Genesis fetch
-   * - Ubuntu 22.04 LTS
+   * - Ubuntu 20.04 LTS
      - ``x86_64``
      - ``ISC``
      - ``xNBA shell``
      - ``makedhcp -n``; ``dhcpd -t``; reservation add/query/delete; DHCP/TFTP;
        node-specific xNBA handoff; Genesis fetch
+   * - Ubuntu 22.04 LTS
+     - ``x86_64``
+     - ``Kea``
+     - ``xNBA shell`` and compute-image handoff
+     - ``makedhcp -n``; ``kea-dhcp4 -t``; reservation add/query/delete;
+       xNBA shell boot; compute-image boot artifact handoff through kernel,
+       initrd, and root image when image validation is in scope
    * - EL10
      - ``x86_64``
      - ``Kea``
-     - ``xNBA shell`` and ``full netboot image``
+     - ``xNBA shell`` and compute-image handoff
      - ``makedhcp -n``; ``kea-dhcp4 -t``; reservation add/query/delete;
-       xNBA shell boot; full compute-image boot through kernel, initrd, and
-       root image
+       xNBA shell boot; compute-image boot artifact handoff through kernel,
+       initrd, and root image when image validation is in scope
    * - Ubuntu 24.04 LTS
      - ``x86_64``
      - ``Kea``
-     - ``xNBA shell`` and ``full netboot image``
+     - ``xNBA shell`` and compute-image handoff
      - ``makedhcp -n``; ``kea-dhcp4 -t``; reservation add/query/delete;
-       xNBA shell boot; full compute-image boot through kernel, initrd, and
-       root image
+       xNBA shell boot; compute-image boot artifact handoff through kernel,
+       initrd, and root image when image validation is in scope
+
+Kea Boot and Reservation Regression Matrix
+------------------------------------------
+
+Run this matrix whenever a change touches Kea boot policy, client
+classification, address pools, or host reservations.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 18 62
+
+   * - Scenario
+     - Backend Scope
+     - Minimum Required Checks
+   * - BIOS PXE/xNBA
+     - ``ISC`` and ``Kea`` when touched
+     - DHCP offer for architecture ``0x0000``; expected BIOS loader
+       ``pxelinux.0`` or ``xcat/xnba.kpxe``; xNBA second-stage URL when the
+       client returns with user-class ``xNBA``.
+   * - UEFI PXE architecture ``0x0007``
+     - ``Kea``
+     - Client matches ``xcat-uefi-x64``; offer includes ``xcat/xnba.efi``;
+       node-specific xNBA UEFI second-stage class returns the ``.uefi`` node
+       script URL.
+   * - UEFI PXE architecture ``0x0009``
+     - ``Kea``
+     - Same checks as ``0x0007``. This is the alternate x86_64 UEFI PXE
+       architecture id observed in the existing xCAT DHCP logic.
+   * - UEFI HTTP architecture ``0x0010``
+     - ``Kea``
+     - Client matches ``xcat-uefi-x64`` and the xNBA UEFI second-stage class;
+       validate the DHCP offer against real UEFI HTTP firmware or an
+       equivalent DHCP client fixture. The April 26, 2026 validation used a raw
+       DHCP fixture with option 93 set to ``0x0010`` and confirmed Kea offered
+       the reserved outside-pool address and ``xcat/xnba.efi`` without
+       ``ALLOC_FAIL_NO_POOLS``.
+   * - Static reservation outside dynamic pool
+     - ``Kea``
+     - Node address is inside the Kea subnet and outside
+       ``networks.dynamicrange``; generated reservation includes
+       ``ip-address``; DHCP ACK uses the reserved address; Kea logs do not
+       contain ``ALLOC_FAIL_NO_POOLS``.
+   * - Static reservation inside dynamic pool
+     - ``Kea``
+     - Record the expected behavior explicitly. Current ``makedhcp`` treats
+       node IPs overlapping ``networks.dynamicrange`` as dynamic and does not
+       render a fixed ``ip-address`` reservation. Any change that supports
+       in-pool fixed reservations must add live allocation coverage.
+   * - Dynamic pool ownership in hierarchy
+     - ``Kea``
+     - When ``networks.dhcpserver`` is set, only the owning DHCP server renders
+       ``networks.dynamicrange`` as Kea pools. Non-owning service nodes may
+       render the subnet for reservations and options, but must not render
+       duplicate dynamic pools.
+   * - Stateful netboot image
+     - ``ISC`` and ``Kea`` when touched
+     - DHCP/TFTP/HTTP handoff reaches kernel, initrd, root image, and the
+       expected xCAT node state.
+   * - Stateless netboot image
+     - ``ISC`` and ``Kea`` when touched
+     - DHCP/TFTP/HTTP handoff reaches the stateless image and validates
+       post-boot xCAT state.
+   * - ``ALLOC_FAIL_NO_POOLS`` regression
+     - ``Kea``
+     - Reproduce a node with static reservation and no usable dynamic pool;
+       confirm Kea still allocates the reserved address and no allocation
+       failure is logged.
 
 Extended Architecture Matrix
 ----------------------------
@@ -109,9 +209,9 @@ paths.
    * - EL10
      - ``ppc64le``
      - ``Kea``
-     - ``Genesis handoff``
-     - DHCP offer; boot file handoff; xCAT Genesis reachability; POWER boot-path
-       correctness
+     - ``POWER GRUB handoff``
+     - DHCP offer; boot file handoff; POWER boot-path correctness; Genesis
+       shell when Genesis payload validation is in scope
 
 Current Lab Baseline
 --------------------
@@ -125,76 +225,183 @@ Validation access should use the ``builder`` account and the
 ``id_ed25519_reposync`` SSH key. Avoid relying on ad-hoc root login or
 one-off cloud-init keys when recording repeatable validation procedure.
 
+Full Ubuntu 24.04 ``x86_64`` stateless KVM validation required Ubuntu
+``genimage`` fixes for early BOOTIF handling and a lean initrd driver set.
+Those image-generation fixes are tracked separately from the Kea DHCP backend
+policy changes.
+
 Known Exceptions
 ----------------
 
 Known blockers do not remove the matrix requirement. They must be recorded
-explicitly in the validation result.
+explicitly in the validation result. A blocker only turns a DHCP acceptance row
+red when the root cause is DHCP backend policy, allocation, or boot option
+rendering.
 
 Current exceptions:
 
 * Ubuntu 22.04 LTS ISC OMAPI/``omshell`` host reservation updates are blocked by
-  issue ``#11``. The failure reproduces on upstream ``master`` and is not caused
-  by the Kea backend work.
-* EL10 ``ppc64le`` Kea configuration and DHCP unit validation pass. Full POWER
-  image boot validation can still be blocked by a ``genesis.kernel.ppc64``
-  invalid-ELF issue unrelated to Kea. Initial triage showed the installed
-  ``/tftpboot/xcat/genesis.kernel.ppc64`` is a PowerPC/OpenPOWER ELF, not an
-  ``x86_64`` binary, and is the package payload from
-  ``xCAT-genesis-base-ppc64-2.18.0-RC1`` built on
-  ``xcat-dev-server-ppc.cluster.local`` on March 30, 2026. The likely change
-  area is the Genesis rebuild work merged before this PR, especially PR ``#8``
-  / merge ``40a7e4c43`` and commits ``d691c5ccd`` (Genesis base source
-  package generation), ``4a1905171`` (ppc64le Genesis boot changes), and
-  ``baa2380cd`` (moving the dracut call into the spec).
+  xCAT3 issue ``#11``. The failure reproduces on upstream ``master`` and is not
+  caused by the Kea backend work. ``site.dhcpbackend=auto`` therefore selects
+  Kea for Ubuntu 22.04 and newer releases; live Ubuntu 22.04 Kea validation
+  remains a follow-up matrix row.
+* Ubuntu ``ppc64le`` package installation is missing required boot packages such
+  as ``goconserver``, ``grub2-xcat``, and ``xcat-genesis-base-ppc64``. This is
+  tracked by xCAT3 issue ``#13`` and is separate from Kea DHCP behavior.
 
 Current PR Validation Snapshot
 ------------------------------
 
-As of April 23, 2026, the ``kea-dhcp-backend`` PR has the following DHCP
-backend validation result:
+As of April 26, 2026, this PR has the following DHCP backend acceptance result
+for the supported KVM rows. All rows in this table are green for the DHCP
+backend scope described above.
 
 .. list-table::
    :header-rows: 1
-   :widths: 16 10 10 20 44
+   :widths: 16 10 12 18 12 32
 
    * - Platform
      - Arch
      - Backend
+     - Boot Path
      - Result
      - Notes
    * - EL9
      - ``x86_64``
      - ``ISC``
+     - BIOS PXE/xNBA
      - Pass
-     - ``site.dhcpbackend=auto`` selected ``isc``; legacy DHCP unit subset
-       passed.
-   * - Ubuntu 22.04 LTS
+     - DHCP/TFTP, node-specific xNBA handoff, Genesis shell, and compute-image
+       validation passed.
+   * - EL9
      - ``x86_64``
      - ``ISC``
-     - Pass with known exception
-     - ``site.dhcpbackend=auto`` selected ``isc``; legacy DHCP unit subset
-       passed. OMAPI reservation updates remain tracked by issue ``#11``.
+     - UEFI PXE/xNBA
+     - Pass
+     - Non-Secure-Boot UEFI DHCP/TFTP, node-specific xNBA handoff, Genesis
+       shell, and compute-image validation passed.
+   * - EL9
+     - ``ppc64le``
+     - ``ISC``
+     - POWER GRUB/Genesis
+     - Pass
+     - DHCP/TFTP/GRUB handoff fetched ``genesis.kernel.ppc64`` and
+       ``genesis.fs.ppc64.gz``; node reached the Genesis shell.
    * - EL10
      - ``x86_64``
      - ``Kea 3.0.1``
+     - BIOS PXE/xNBA
      - Pass
-     - Renderer emitted ``evaluate-additional-classes`` and
-       ``only-in-additional-list``; ``kea-dhcp4 -t`` passed.
+     - Static reservation outside ``networks.dynamicrange`` allocated; no
+       ``ALLOC_FAIL_NO_POOLS``; xNBA shell passed; regenerated compute-image
+       boot reached ``sshd`` with ``selinux=0`` in the command line.
    * - Ubuntu 24.04 LTS
      - ``x86_64``
      - ``Kea 2.4.1``
+     - BIOS PXE/xNBA
      - Pass
-     - Renderer emitted ``require-client-classes`` and ``only-if-required``;
-       full DHCP unit suite and ``kea-dhcp4 -t`` passed.
+     - Static reservation outside ``networks.dynamicrange`` allocated; no
+       ``ALLOC_FAIL_NO_POOLS``; xNBA shell passed; compute-image boot fetched
+       ``rootimg.cpio.gz`` and reached ``sshd`` with ``netdrivers=overlay``.
+   * - EL10
+     - ``x86_64``
+     - ``Kea 3.0.1``
+     - UEFI PXE/xNBA
+     - Pass
+     - Non-Secure-Boot UEFI path matched the Kea x86_64 UEFI boot policy;
+       regenerated compute-image boot reached ``sshd`` with ``selinux=0`` in
+       the command line.
+   * - EL10
+     - ``x86_64``
+     - ``Kea 3.0.1``
+     - UEFI HTTP arch ``0x0010``
+     - Pass
+     - Raw DHCP fixture on the KVM provisioning bridge sent option 93
+       ``0x0010`` from the reserved outside-pool node MAC and received lease
+       ``10.241.10.22`` with boot file ``xcat/xnba.efi``; no
+       ``ALLOC_FAIL_NO_POOLS`` was observed. xCAT3 issue ``#17`` is closed as
+       completed.
+   * - Ubuntu 24.04 LTS
+     - ``x86_64``
+     - ``Kea 2.4.1``
+     - UEFI PXE/xNBA
+     - Pass
+     - Non-Secure-Boot UEFI path matched the Kea x86_64 UEFI boot policy;
+       xNBA shell passed; compute-image boot fetched ``rootimg.cpio.gz`` and
+       reached ``sshd`` with the separate Ubuntu ``genimage`` fixes applied.
    * - EL10
      - ``ppc64le``
      - ``Kea 3.0.1``
+     - POWER GRUB/Genesis
      - Pass
-     - Renderer emitted ``evaluate-additional-classes`` and
-       ``only-in-additional-list``; full DHCP unit suite and ``kea-dhcp4 -t``
-       passed. Full image boot remains blocked after GRUB by the separate
-       Genesis ppc64 kernel issue described above.
+     - Static reservation outside ``networks.dynamicrange`` allocated; no
+       ``ALLOC_FAIL_NO_POOLS``; TFTP/GRUB handoff passed; original EL10
+       ``genesis.kernel.ppc64`` and ``genesis.fs.ppc64.gz`` reached xCAT
+       ``shell`` state after replacing the broken ``grub2-xcat 1.0-3`` ppc
+       GRUB core/module tree with the coherent
+       ``2.02-0.76.el7.1.snap201905160255`` tree. The remaining xCAT3 issue
+       ``#16`` follow-up is package provenance for ``grub2-xcat``, not DHCP or
+       Genesis payload behavior.
+   * - Ubuntu 24.04 LTS
+     - ``ppc64le``
+     - ``Kea 2.4.1``
+     - POWER GRUB/Genesis
+     - Pass
+     - Static reservation outside ``networks.dynamicrange`` allocated; no
+       ``ALLOC_FAIL_NO_POOLS``; DHCP/TFTP/GRUB handoff passed and the node
+       reached Genesis with the temporary EL9 ppc64le payload workaround.
+
+Skipped Rows
+------------
+
+The following rows are intentionally not counted in the current PR acceptance
+table:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 10 12 60
+
+   * - Platform
+     - Arch
+     - Backend
+     - Reason
+   * - Ubuntu 22.04 LTS
+     - ``x86_64``
+     - ``Kea``
+     - Skipped in this PR. Unit coverage now pins Ubuntu 22.04 to Kea by
+       default because ISC OMAPI/``omshell`` is blocked by xCAT3 issue ``#11``;
+       live KVM validation remains a follow-up row.
+   * - Ubuntu 22.04 LTS
+     - ``ppc64le``
+     - ``Kea``
+     - Skipped for the same Ubuntu 22.04 Kea follow-up validation reason as the
+       ``x86_64`` row.
+
+External Follow-up Tracking
+---------------------------
+
+These issues are outside the DHCP acceptance result but must be referenced when
+reporting this validation run:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 12 22 66
+
+   * - Issue
+     - Area
+     - Impact
+   * - xCAT3 ``#13``
+     - Ubuntu ``ppc64le`` packages
+     - Missing ``goconserver``, ``grub2-xcat``, and
+       ``xcat-genesis-base-ppc64`` block clean Ubuntu ppc64le package
+       installation.
+   * - xCAT3 ``#16``
+     - ``ppc64le`` GRUB package
+     - EL10 ppc64le fails with ``grub2-xcat 1.0-3`` because its POWER GRUB
+       core/module tree cannot load the ppc64le Genesis kernel. The live row is
+       green after hotpatching the TFTP GRUB tree to
+       ``2.02-0.76.el7.1.snap201905160255`` while keeping the original EL10
+       Genesis payload.
 
 Reporting Rule
 --------------

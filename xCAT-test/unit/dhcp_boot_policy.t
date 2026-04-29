@@ -22,6 +22,7 @@ is( $by_name{'xcat-bios'}{'boot-file-name'}, 'xcat/xnba.kpxe', 'BIOS clients rec
 like( $by_name{'xcat-bios'}{test}, qr/not \(\(option\[77\]\.exists/, 'generic BIOS class excludes xNBA second-stage clients' );
 like( $by_name{'xcat-uefi-x64'}{test}, qr/0x0007/, 'UEFI x64 class matches architecture 7' );
 like( $by_name{'xcat-uefi-x64'}{test}, qr/0x0009/, 'UEFI x64 class matches architecture 9' );
+like( $by_name{'xcat-uefi-x64'}{test}, qr/0x0010/, 'UEFI x64 class matches HTTP boot architecture 16' );
 like( $by_name{'xcat-uefi-x64'}{test}, qr/not \(\(option\[77\]\.exists/, 'generic UEFI class excludes xNBA second-stage clients' );
 is( $by_name{'xcat-aarch64'}{'boot-file-name'}, 'boot/grub2/grub2.aarch64', 'AArch64 clients receive grub2 boot file' );
 is( $by_name{'xcat-ppc64'}{'boot-file-name'}, '/boot/grub2/grub2.ppc', 'POWER clients receive grub2 Open Firmware boot file' );
@@ -48,6 +49,9 @@ like( $xnba_bios->{test}, qr/pkt4\.mac == 0x52544b100011/, 'xNBA second-stage cl
 is( $xnba_bios->{'boot-file-name'}, 'http://10.241.10.1:80/tftpboot/xcat/xnba/nodes/cn01', 'xNBA BIOS class returns the node script URL' );
 is( $xnba_bios->{'user-context'}{'xcat-purpose'}, 'xnba-second-stage', 'xNBA class carries removable user-context' );
 is( $xnba_by_name{'xcat-xnba-cn01-52544b100011-uefi'}{'boot-file-name'}, 'http://10.241.10.1:80/tftpboot/xcat/xnba/nodes/cn01.uefi', 'xNBA UEFI class returns the UEFI node script URL' );
+like( $xnba_by_name{'xcat-xnba-cn01-52544b100011-uefi'}{test}, qr/0x0007/, 'xNBA UEFI class matches standard UEFI PXE architecture 7' );
+like( $xnba_by_name{'xcat-xnba-cn01-52544b100011-uefi'}{test}, qr/0x0009/, 'xNBA UEFI class matches alternate UEFI PXE architecture 9' );
+like( $xnba_by_name{'xcat-xnba-cn01-52544b100011-uefi'}{test}, qr/0x0010/, 'xNBA UEFI class matches UEFI HTTP boot architecture 16' );
 
 my $combined_classes = xCAT::DHCP::BootPolicy->kea_client_classes(
     xnba_kpxe         => 1,
