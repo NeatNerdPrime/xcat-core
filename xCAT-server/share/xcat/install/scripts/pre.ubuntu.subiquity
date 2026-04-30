@@ -10,13 +10,14 @@ systemctl stop syslog.socket
 systemctl stop rsyslog
 # however, lets make sure . . .
 [ -e /var/run/rsyslogd.pid ] && kill -TERM $(cat /var/run/rsyslogd.pid)
-# bare minimum rsyslog.conf to support UDP forwarding
-cat <<EOF > /tmp/rsyslog.conf
+# bare minimum rsyslog.conf to support UDP forwarding. Newer Ubuntu releases
+# run rsyslog under AppArmor and do not allow a config file from /tmp.
+cat <<EOF > /etc/rsyslog.conf
 module(load="imuxsock")
 module(load="imklog" permitnonkernelfacility="on")
 *.* @#XCATVAR:XCATMASTER#
 EOF
-rsyslogd -f /tmp/rsyslog.conf
+rsyslogd -f /etc/rsyslog.conf
 log_label="xcat.deployment"
 logger -t $log_label -p "info" "============deployment starting============"
 logger -t $log_label -p "info" "Running preseeding early_command Installation script..."

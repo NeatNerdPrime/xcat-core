@@ -12,13 +12,7 @@ autoinstall:
     allow-pw: true
     authorized-keys: []
     install-server: true
-  apt:
-    fallback: offline-install
-    geoip: false
-    disable_suites:
-      - updates
-      - backports
-      - security
+#UBUNTU_SUBIQUITY_APT_CONFIG#
   kernel:
     package: linux-generic
   user-data:
@@ -28,13 +22,20 @@ autoinstall:
     package_upgrade: false
     timezone: #TABLE:site:key=timezone:value#
     chpasswd:
-      list: |
-        root:#CRYPT:passwd:key=system,username=root:password#
+      list:
+        - "root:#CRYPTORLOCKED:passwd:key=system,username=root:password#"
       expire: false
   packages:
     - openssh-server
     - openssh-client
     - wget
+    - vim
+    - rsync
+    - busybox-static
+    - gawk
+    - bind9-dnsutils
+    - chrony
+    - gpg
   early-commands:
     - |
       exec >/tmp/pre-install.log 2>&1
@@ -90,4 +91,4 @@ autoinstall:
     curtin in-target --target /target /root/post.script;
     } >>/target/var/log/xcat/xcat.log 2>&1'
   error-commands:
-    - tar -c --transform='s/^/#HOSTNAME#-logs\//' /var/crash /var/log/installer /tmp/pre-install.log /autoinstall.yaml 2>/dev/null |nc -l 8080
+    - tar -c --ignore-failed-read --transform='s/^/#HOSTNAME#-logs\//' /var/crash /var/log/installer /tmp/pre-install.log /autoinstall.yaml 2>/dev/null |nc -l 8080

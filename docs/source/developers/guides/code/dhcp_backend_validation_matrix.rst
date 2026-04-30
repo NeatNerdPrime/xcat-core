@@ -122,6 +122,13 @@ The following matrix is the default live validation gate for DHCP backend work.
      - ``makedhcp -n``; ``kea-dhcp4 -t``; reservation add/query/delete;
        xNBA shell boot; compute-image boot artifact handoff through kernel,
        initrd, and root image when image validation is in scope
+   * - Ubuntu 26.04 LTS
+     - ``x86_64``
+     - ``Kea``
+     - ``xNBA shell`` and compute-image handoff
+     - ``makedhcp -n``; ``kea-dhcp4 -t``; reservation add/query/delete;
+       xNBA shell boot; stateful subiquity and stateless compute-image handoff
+       through kernel, initrd, and root image when image validation is in scope
 
 Kea Boot and Reservation Regression Matrix
 ------------------------------------------
@@ -212,18 +219,20 @@ paths.
      - ``POWER GRUB handoff``
      - DHCP offer; boot file handoff; POWER boot-path correctness; Genesis
        shell when Genesis payload validation is in scope
+   * - Ubuntu 26.04 LTS
+     - ``ppc64le``
+     - ``Kea``
+     - ``POWER GRUB handoff``
+     - package installation on ``ppc64el``; DHCP offer; boot file handoff;
+       POWER boot-path correctness; Genesis shell when live validation is in
+       scope
 
 Current Lab Baseline
 --------------------
 
-The current KVM validation hosts are:
-
-* ``rome01.local.versatushpc.com.br`` for ``x86_64``
-* ``power.local.versatushpc.com.br`` for ``ppc64le``
-
-Validation access should use the ``builder`` account and the
-``id_ed25519_reposync`` SSH key. Avoid relying on ad-hoc root login or
-one-off cloud-init keys when recording repeatable validation procedure.
+KVM validation should cover both ``x86_64`` and ``ppc64le`` hosts. Record the
+repeatable lab access method privately with the validation run instead of
+embedding site-specific hostnames or credentials in this repository.
 
 Full Ubuntu 24.04 ``x86_64`` stateless KVM validation required Ubuntu
 ``genimage`` fixes for early BOOTIF handling and a lean initrd driver set.
@@ -240,14 +249,14 @@ rendering.
 
 Current exceptions:
 
-* Ubuntu 22.04 LTS ISC OMAPI/``omshell`` host reservation updates are blocked by
-  xCAT3 issue ``#11``. The failure reproduces on upstream ``master`` and is not
-  caused by the Kea backend work. ``site.dhcpbackend=auto`` therefore selects
-  Kea for Ubuntu 22.04 and newer releases; live Ubuntu 22.04 Kea validation
-  remains a follow-up matrix row.
+* Ubuntu 22.04 LTS ISC OMAPI/``omshell`` host reservation updates are
+  unreliable on current upstream code and are not caused by the Kea backend
+  work. ``site.dhcpbackend=auto`` therefore selects Kea for Ubuntu 22.04 and
+  newer releases; live Ubuntu 22.04 Kea validation remains a follow-up matrix
+  row.
 * Ubuntu ``ppc64le`` package installation is missing required boot packages such
   as ``goconserver``, ``grub2-xcat``, and ``xcat-genesis-base-ppc64``. This is
-  tracked by xCAT3 issue ``#13`` and is separate from Kea DHCP behavior.
+  tracked separately and is not a Kea DHCP behavior issue.
 
 Current PR Validation Snapshot
 ------------------------------
@@ -319,8 +328,7 @@ backend scope described above.
      - Raw DHCP fixture on the KVM provisioning bridge sent option 93
        ``0x0010`` from the reserved outside-pool node MAC and received lease
        ``10.241.10.22`` with boot file ``xcat/xnba.efi``; no
-       ``ALLOC_FAIL_NO_POOLS`` was observed. xCAT3 issue ``#17`` is closed as
-       completed.
+       ``ALLOC_FAIL_NO_POOLS`` was observed.
    * - Ubuntu 24.04 LTS
      - ``x86_64``
      - ``Kea 2.4.1``
@@ -339,9 +347,9 @@ backend scope described above.
        ``genesis.kernel.ppc64`` and ``genesis.fs.ppc64.gz`` reached xCAT
        ``shell`` state after replacing the broken ``grub2-xcat 1.0-3`` ppc
        GRUB core/module tree with the coherent
-       ``2.02-0.76.el7.1.snap201905160255`` tree. The remaining xCAT3 issue
-       ``#16`` follow-up is package provenance for ``grub2-xcat``, not DHCP or
-       Genesis payload behavior.
+       ``2.02-0.76.el7.1.snap201905160255`` tree. The remaining follow-up is
+       package provenance for ``grub2-xcat``, not DHCP or Genesis payload
+       behavior.
    * - Ubuntu 24.04 LTS
      - ``ppc64le``
      - ``Kea 2.4.1``
@@ -354,22 +362,26 @@ backend scope described above.
 Ubuntu LTS KVM Validation Snapshot
 ----------------------------------
 
-As of April 29, 2026, the Ubuntu LTS KVM validation for the Ubuntu
+As of May 1, 2026, the Ubuntu LTS KVM validation for the Ubuntu
 provisioning restoration work has the following result:
 
 .. list-table::
    :header-rows: 1
-   :widths: 14 10 10 12 12 42
+   :widths: 14 9 9 12 12 12 12 30
 
    * - Platform
      - Arch
      - Backend
-     - BIOS
-     - UEFI
+     - BIOS Stateless
+     - BIOS Stateful
+     - UEFI Stateless
+     - UEFI Stateful
      - Notes
    * - Ubuntu 18.04 LTS
      - ``x86_64``
      - ``ISC``
+     - Pass
+     - Pass
      - Pass
      - Pass
      - Stateless and stateful compute boots passed against an Ubuntu 18.04
@@ -384,12 +396,16 @@ provisioning restoration work has the following result:
      - ``ISC``
      - Pass
      - Pass
+     - Pass
+     - Pass
      - Stateless and stateful compute boots passed. Stateful validation used a
        manual static reservation workaround for the known forced-ISC OMAPI
        issue.
    * - Ubuntu 22.04 LTS
      - ``x86_64``
      - ``Kea``
+     - Pass
+     - Pass
      - Pass
      - Pass
      - Stateless and stateful compute boots passed. Kea 2.0.2 configuration
@@ -401,40 +417,30 @@ provisioning restoration work has the following result:
      - ``Kea``
      - Pass
      - Pass
+     - Pass
+     - Pass
      - Stateless and stateful compute boots passed. Kea 2.4.1 configuration
        validation with ``kea-dhcp4 -t`` passed on the Ubuntu 24.04 headnode.
        ``makedns -n`` starts ``bind9`` successfully, and the DHCP section of
        ``xcatprobe xcatmn`` passed on consecutive runs. UEFI validation used
        OVMF Secure Boot disabled.
-
-Skipped Rows
-------------
-
-The following rows are intentionally not counted in the current PR acceptance
-table:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 18 10 12 60
-
-   * - Platform
-     - Arch
-     - Backend
-     - Reason
-   * - Ubuntu 22.04 LTS
+   * - Ubuntu 26.04 LTS
      - ``x86_64``
      - ``Kea``
-     - Skipped in this PR. Unit coverage now pins Ubuntu 22.04 to Kea by
-       default because ISC OMAPI/``omshell`` is blocked by xCAT3 issue ``#11``;
-       live KVM validation remains a follow-up row.
-   * - Ubuntu 22.04 LTS
-     - ``ppc64le``
-     - ``Kea``
-     - Skipped for the same Ubuntu 22.04 Kea follow-up validation reason as the
-       ``x86_64`` row.
+     - Pass
+     - Pass
+     - Pass
+     - Pass
+     - Stateless and stateful compute boots passed against an Ubuntu 26.04
+       headnode. Kea 3.0.3 configuration validation with ``kea-dhcp4 -t``
+       passed. Stateless BIOS and UEFI nodes reached ``sshd`` after the
+       netboot image was repacked with the recursive postscript download fix;
+       stateful BIOS and UEFI nodes completed Subiquity install and booted from
+       disk. Kea logs showed no ``ALLOC_FAIL_NO_POOLS``. UEFI validation used
+       OVMF Secure Boot disabled.
 
-External Follow-up Tracking
----------------------------
+Follow-up Tracking
+------------------
 
 These issues are outside the DHCP acceptance result but must be referenced when
 reporting this validation run:
@@ -446,12 +452,12 @@ reporting this validation run:
    * - Issue
      - Area
      - Impact
-   * - xCAT3 ``#13``
+   * - Ubuntu ``ppc64le`` packages
      - Ubuntu ``ppc64le`` packages
      - Missing ``goconserver``, ``grub2-xcat``, and
        ``xcat-genesis-base-ppc64`` block clean Ubuntu ppc64le package
        installation.
-   * - xCAT3 ``#16``
+   * - ``ppc64le`` GRUB package
      - ``ppc64le`` GRUB package
      - EL10 ppc64le fails with ``grub2-xcat 1.0-3`` because its POWER GRUB
        core/module tree cannot load the ppc64le Genesis kernel. The live row is

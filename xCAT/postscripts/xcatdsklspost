@@ -108,7 +108,10 @@ download_postscripts()
             rm -rf "$xcatpost"
         fi
 
-        export LANG=C; wget -l inf -nH -N -r --waitretry=10 --random-wait -e robots=off -T 60 -nH --cut-dirs=2 --reject "index.html*" --no-parent http://$server$INSTALLDIR/postscripts/ -P /$xcatpost 2> /tmp/wget.log
+        # These dispatcher scripts are not needed by the legacy netboot post
+        # path. Newer wget parses HTML-looking regex strings inside downloaded
+        # scripts and fails the whole recursive download on bogus URLs.
+        export LANG=C; wget -l inf -nH -N -r --waitretry=10 --random-wait -e robots=off -T 60 -nH --cut-dirs=2 --reject "index.html*,post.xcat.ng,post.xcat.rhels10" --no-parent http://$server$INSTALLDIR/postscripts/ -P /$xcatpost 2> /tmp/wget.log
         rc=$?
         if [ $rc -eq 0 ]; then
             # return from wget was 0 but some OS do not return errors, so we
