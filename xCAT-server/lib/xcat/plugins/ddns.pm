@@ -27,18 +27,34 @@ my $ddns_key_path = "/etc/xcat/ddns.key";
 
 # Net::DNS >= 1.36 removed support for sign_tsig($keyname, $secret) and now
 # expects a keyfile. Keep the keyfile in sync with the xcat_key secret.
+sub ddns_tsig_algorithm {
+    my ($ctx) = @_;
+
+    # Older Net::DNS releases used by Ubuntu 22.04 cannot sign updates with the
+    # keyfile API, so keep the generated xCAT key on the legacy algorithm that
+    # both old and new Net::DNS can use.
+    return "hmac-md5" if (Net::DNS->VERSION < 1.36);
+    return $ctx->{tsig_algorithm} || "hmac-md5";
+}
+
+sub ddns_key_contents {
+    my ($ctx) = @_;
+
+    my $algorithm = ddns_tsig_algorithm($ctx);
+    return
+        "key \"xcat_key\" {\n"
+      . "\talgorithm $algorithm;\n"
+      . "\tsecret \"" . $ctx->{privkey} . "\";\n"
+      . "};\n\n";
+}
+
 sub ensure_ddns_key_file {
     my ($ctx) = @_;
 
     return unless (Net::DNS->VERSION >= 1.36);
     return unless ($ctx && $ctx->{privkey});
 
-    my $algorithm = $ctx->{tsig_algorithm} || "hmac-sha256";
-    my $contents =
-        "key \"xcat_key\" {\n"
-      . "\talgorithm $algorithm;\n"
-      . "\tsecret \"" . $ctx->{privkey} . "\";\n"
-      . "};\n\n";
+    my $contents = ddns_key_contents($ctx);
 
     if (open(my $existing_fh, "<", $ddns_key_path)) {
         local $/;
@@ -1278,18 +1294,22 @@ sub update_namedconf {
                 $gotkey = 1;
                 my $algorithmnow;
                 if ($ctx->{privkey}) {
-
-                    #for now, assume the field is correct
-                    #push @newnamed,"key xcat_key {\n","\talgorithm hmac-md5;\n","\tsecret \"".$ctx->{privkey}."\";\n","};\n\n";
-                    push @newnamed, $line;
+                    my @keyblock = ($line);
                     do {
                         $i++;
                         $line = $currnamed[$i];
                         if ($line =~ /^\s*algorithm\s+([^;\s]+)\s*;/) {
                             $algorithmnow = $1;
                         }
-                        push @newnamed, $line;
+                        push @keyblock, $line;
                     } while ($line !~ /^\};/);
+                    if ($algorithmnow && Net::DNS->VERSION < 1.36 && lc($algorithmnow) ne "hmac-md5") {
+                        $ctx->{tsig_algorithm} = "hmac-md5";
+                        push @newnamed, ddns_key_contents($ctx);
+                        $ctx->{restartneeded} = 1;
+                    } else {
+                        push @newnamed, @keyblock;
+                    }
                 } else {
                     push @newnamed, $line;
                     while ($line !~ /^\};/) {    #skip the old file zone
@@ -1406,8 +1426,8 @@ sub update_namedconf {
                 $ctx->{privkey} = encode_base64(genpassword(32));
                 chomp($ctx->{privkey});
             }
-            $ctx->{tsig_algorithm} ||= "hmac-sha256";
-            my $contents = "key \"xcat_key\" {\n" . "\talgorithm " . $ctx->{tsig_algorithm} . ";\n" . "\tsecret \"" . $ctx->{privkey} . "\";\n" . "};\n\n";
+            $ctx->{tsig_algorithm} ||= ddns_tsig_algorithm($ctx);
+            my $contents = ddns_key_contents($ctx);
             push @newnamed, $contents;
             ensure_ddns_key_file($ctx);
             $ctx->{restartneeded} = 1;

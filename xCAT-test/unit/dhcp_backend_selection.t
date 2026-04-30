@@ -50,6 +50,12 @@ is(
 );
 
 is(
+    xCAT::DHCP::Backend->default_backend( platform => '', os => 'ubuntu22.04.5', os_name => 'ubuntu', version => '22.04.5' ),
+    'kea',
+    'Ubuntu 22.04 point releases default to Kea'
+);
+
+is(
     xCAT::DHCP::Backend->default_backend( platform => '', os => 'ubuntu20.04', os_name => 'ubuntu', version => '20.04' ),
     'isc',
     'Ubuntu 20.04 defaults to ISC'

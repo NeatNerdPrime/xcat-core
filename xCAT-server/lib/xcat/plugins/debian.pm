@@ -418,8 +418,27 @@ sub copycd
     my @line = split(" ", `ls -lh $installroot/$distname/$arch/dists/ | grep dr`);
     my $dist = $line[ @line - 1 ];
 
-    # touches the Packages file so that deb packaging works
-    system("touch $installroot/$distname/$arch/dists/$dist/restricted/binary-$debarch/Packages");
+    # Ensure the uncompressed Packages file exists.  The ISO ships only
+    # Packages.gz; an empty Packages file causes apt hash-sum failures
+    # during autoinstall because apt reads the zero-length file instead
+    # of falling back to the compressed variant.
+    my $pkgdir = "$installroot/$distname/$arch/dists/$dist/restricted/binary-$debarch";
+    if (-d $pkgdir) {
+        my $pkgfile = "$pkgdir/Packages";
+        my $pkggz   = "$pkgfile.gz";
+        if (-f $pkggz && (! -f $pkgfile || -z $pkgfile)) {
+            if (open(my $in, '-|', 'gzip', '-dc', $pkggz)) {
+                if (open(my $out, '>', $pkgfile)) {
+                    copy($in, $out);
+                    close($out);
+                }
+                close($in);
+            }
+        } elsif (! -f $pkgfile) {
+            open(my $fh, '>', $pkgfile);
+            close($fh) if $fh;
+        }
+    }
 
     # removes the links unstable and testing, otherwise the repository does not work for debian
     system("rm -f $installroot/$distname/$arch/dists/unstable");
@@ -753,8 +772,11 @@ sub mkinstall {
                 }
                 mkpath($autoinstfile);
 
-                # create empty meta-data file
+                # create empty meta-data and vendor-data files
                 open(my $fh, ">", $autoinstfile . "/meta-data");
+                close($fh);
+                open($fh, ">", $autoinstfile . "/vendor-data");
+                print $fh "{}\n";
                 close($fh);
 
                 # point the template output at the /user-data file
@@ -937,6 +959,7 @@ sub mkinstall {
             if (using_subiquity($os,$tmplfile)) {
                 $kcmdline .= " autoinstall ip=dhcp netboot=nfs nfsroot=${instserver}:${pkgdir}";
                 $kcmdline .= " ds=nocloud-net;s=http://${instserver}:${httpport}/install/autoinst/${node}/";
+                $kcmdline .= " ---";
             } else {
                 $kcmdline .= " url=http://${instserver}:$httpport/install/autoinst/$node";
                 $kcmdline .= " mirror/http/hostname=${instserver}:$httpport";
@@ -1766,20 +1789,18 @@ sub setupNFSTree {
             if (grep /\Q$nfsdirectory\E/, @entries) {
                 $callback->({ data => ["$nfsdirectory has been exported already!"] });
             } else {
-                $cmd = "/usr/sbin/exportfs :$nfsdirectory";
+                $cmd = "/usr/sbin/exportfs :$nfsdirectory -o rw,no_root_squash,sync,no_subtree_check,insecure";
                 xCAT::Utils->runcmd($cmd, 0);
-
-                # exportfs can export this directory immediately
                 $callback->({ data => ["now $nfsdirectory is exported!"] });
-                $cmd = "cat /etc/exports";
-                @entries = xCAT::Utils->runcmd($cmd, 0);
-                unless (my $entry = grep /\Q$nfsdirectory\E/, @entries) {
+            }
 
-                    # if no entry in /etc/exports, one entry with default options will be added
-                    $cmd = qq{echo "$nfsdirectory *(rw,no_root_squash,sync,no_subtree_check)" >> /etc/exports};
-                    xCAT::Utils->runcmd($cmd, 0);
-                    $callback->({ data => ["$nfsdirectory is added to /etc/exports with default option"] });
-                }
+            if (xCAT::SvrUtils->ensure_nfs_export_option($nfsdirectory, 'insecure')) {
+                xCAT::Utils->runcmd("/usr/sbin/exportfs -r", 0);
+                $callback->({ data => ["added insecure to existing $nfsdirectory export"] });
+            } elsif (!xCAT::SvrUtils->nfs_export_exists($nfsdirectory)) {
+                $cmd = qq{echo "$nfsdirectory *(rw,no_root_squash,sync,no_subtree_check,insecure)" >> /etc/exports};
+                xCAT::Utils->runcmd($cmd, 0);
+                $callback->({ data => ["$nfsdirectory is added to /etc/exports with default option"] });
             }
         }
     }
@@ -1808,21 +1829,17 @@ sub setupStatemnt {
         if (grep /\Q$nfsdirectory\E/, @entries) {
             $callback->({ data => ["$nfsdirectory has been exported already!"] });
         } else {
-            $cmd = "/usr/sbin/exportfs :$nfsdirectory -o rw,no_root_squash,sync,no_subtree_check";
+            $cmd = "/usr/sbin/exportfs :$nfsdirectory -o rw,no_root_squash,sync,no_subtree_check,insecure";
             xCAT::Utils->runcmd($cmd, 0);
             $callback->({ data => ["now $nfsdirectory is exported!"] });
+        }
 
-            # add the directory into /etc/exports if not exist
-            $cmd = "cat /etc/exports";
-            @entries = xCAT::Utils->runcmd($cmd, 0);
-            if (my $entry = grep /\Q$nfsdirectory\E/, @entries) {
-                unless ($entry =~ m/rw/) {
-                    $callback->({ data => ["The $nfsdirectory should be with rw option in /etc/exports"] });
-                }
-            } else {
-                xCAT::Utils->runcmd(qq{echo "$nfsdirectory *(rw,no_root_squash,sync,no_subtree_check)" >> /etc/exports}, 0);
-                $callback->({ data => ["$nfsdirectory is added into /etc/exports with default options"] });
-            }
+        if (xCAT::SvrUtils->ensure_nfs_export_option($nfsdirectory, 'insecure')) {
+            xCAT::Utils->runcmd("/usr/sbin/exportfs -r", 0);
+            $callback->({ data => ["added insecure to existing $nfsdirectory export"] });
+        } elsif (!xCAT::SvrUtils->nfs_export_exists($nfsdirectory)) {
+            xCAT::Utils->runcmd(qq{echo "$nfsdirectory *(rw,no_root_squash,sync,no_subtree_check,insecure)" >> /etc/exports}, 0);
+            $callback->({ data => ["$nfsdirectory is added into /etc/exports with default options"] });
         }
     }
 }

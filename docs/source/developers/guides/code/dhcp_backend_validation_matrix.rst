@@ -351,6 +351,62 @@ backend scope described above.
        ``ALLOC_FAIL_NO_POOLS``; DHCP/TFTP/GRUB handoff passed and the node
        reached Genesis with the temporary EL9 ppc64le payload workaround.
 
+Ubuntu LTS KVM Validation Snapshot
+----------------------------------
+
+As of April 29, 2026, the Ubuntu LTS KVM validation for the Ubuntu
+provisioning restoration work has the following result:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 14 10 10 12 12 42
+
+   * - Platform
+     - Arch
+     - Backend
+     - BIOS
+     - UEFI
+     - Notes
+   * - Ubuntu 18.04 LTS
+     - ``x86_64``
+     - ``ISC``
+     - Pass
+     - Pass
+     - Stateless and stateful compute boots passed against an Ubuntu 18.04
+       headnode. The 18.04 debian-installer initrd did not include
+       ``virtio_blk`` in this KVM environment, so stateful VMs used
+       ``virtio-scsi`` disks. The legacy preseed disables installer
+       update/security services so stateful installs and ``apt-get update``
+       use only the local xCAT install media. Persistent interface naming used
+       ``R::net.ifnames=0 R::biosdevname=0``.
+   * - Ubuntu 20.04 LTS
+     - ``x86_64``
+     - ``ISC``
+     - Pass
+     - Pass
+     - Stateless and stateful compute boots passed. Stateful validation used a
+       manual static reservation workaround for the known forced-ISC OMAPI
+       issue.
+   * - Ubuntu 22.04 LTS
+     - ``x86_64``
+     - ``Kea``
+     - Pass
+     - Pass
+     - Stateless and stateful compute boots passed. Kea 2.0.2 configuration
+       validation with ``kea-dhcp4 -t`` passed on the Ubuntu 22.04 headnode.
+       ``makedns -n`` starts ``bind9`` successfully, and the DHCP section of
+       ``xcatprobe xcatmn`` passed on consecutive runs.
+   * - Ubuntu 24.04 LTS
+     - ``x86_64``
+     - ``Kea``
+     - Pass
+     - Pass
+     - Stateless and stateful compute boots passed. Kea 2.4.1 configuration
+       validation with ``kea-dhcp4 -t`` passed on the Ubuntu 24.04 headnode.
+       ``makedns -n`` starts ``bind9`` successfully, and the DHCP section of
+       ``xcatprobe xcatmn`` passed on consecutive runs. UEFI validation used
+       OVMF Secure Boot disabled.
+
 Skipped Rows
 ------------
 

@@ -9,6 +9,10 @@ use lib "$::XCATROOT/lib/perl";
 
 use strict;
 use IPC::Open2;
+use IPC::Open3;
+use IO::Select;
+use Symbol qw/gensym/;
+use POSIX qw/WNOHANG/;
 use xCAT::Table;
 
 #use Data::Dumper;
@@ -150,160 +154,138 @@ sub handled_commands
 }
 
 ######################################################
+# Run omshell to query a host and parse the output.
+# Uses a heredoc pipe instead of open2 to avoid deadlock
+# when omshell produces output before all input is consumed.
+######################################################
+sub _omshell_query_host
+{
+    my $node      = shift;
+    my $omapiuser = shift;
+    my $omapikey  = shift;
+    my $port      = shift;
+
+    my $port_cmd = defined($port) ? "port $port\n" : "";
+    my $omcmds = "${port_cmd}key $omapiuser \"$omapikey\"\nconnect\nnew host\nset name = \"$node\"\nopen\nclose\n";
+
+    my @output = _run_omshell($omcmds);
+
+    return _parse_omshell_host_output($node, @output);
+}
+
+sub _run_omshell
+{
+    my $omcmds = shift;
+
+    my ($in, $out);
+    my $err = gensym;
+    my $pid = eval { open3($in, $out, $err, '/usr/bin/omshell') };
+    return () if $@ || !$pid;
+
+    print $in $omcmds;
+    close($in);
+
+    my @output;
+    my $selector = IO::Select->new($out, $err);
+    my $deadline = time + 10;
+    while ($selector->count) {
+        my $remaining = $deadline - time;
+        if ($remaining <= 0) {
+            kill 'TERM', $pid;
+            last;
+        }
+
+        foreach my $fh ($selector->can_read($remaining)) {
+            my $line = <$fh>;
+            if (defined $line) {
+                push @output, $line if fileno($fh) == fileno($out);
+            } else {
+                $selector->remove($fh);
+                close($fh);
+            }
+        }
+    }
+
+    for (1 .. 10) {
+        last if waitpid($pid, WNOHANG) == $pid;
+        select(undef, undef, undef, 0.1);
+    }
+    if (waitpid($pid, WNOHANG) == 0) {
+        kill 'KILL', $pid;
+        waitpid($pid, 0);
+    }
+
+    return @output;
+}
+
+sub _parse_omshell_host_output
+{
+    my ($node, @output) = @_;
+
+    my ($nname, $ipaddr, $hwaddr);
+    foreach my $line (@output) {
+        chomp $line;
+        if ($line =~ /^\s*name\s*=\s*"?(.*?)"?\s*$/) {
+            $nname = $1 if $1 eq $node;
+        } elsif ($line =~ /^\s*hardware-address\s*=/) {
+            $hwaddr = $line;
+        } elsif ($line =~ /^\s*ip-address\s*=\s*(.+?)\s*$/) {
+            my $ip = $1;
+            if ($ip =~ /^(?:[[:xdigit:]]{1,2}:){3}[[:xdigit:]]{1,2}$/) {
+                my @parts = split(/\:/, $ip);
+                $ipaddr = "ip-address = " . join(".", map { hex($_) } @parts);
+            } else {
+                $ipaddr = "ip-address = $ip";
+            }
+        }
+    }
+
+    $nname = $node if !$nname && $ipaddr;
+    return ($nname, $ipaddr, $hwaddr);
+}
+
+######################################################
 # List nodes in DHCP for both IPv4 and IPv6
 ######################################################
 sub listnode
 {
     my $node     = shift;
     my $callback = shift;
-    my $lines;
-    my $ipaddr = "";
-    my $hwaddr;
-    my $nname;
     my $rsp;
-    my ($OMOUT, $OMIN, $OMOUT6, $OMIN6);
 
-    my $usingipv6;
     my $omapiuser;
     my $omapikey;
 
-    # Collect the omapi user and key from the passwd table
     my $pwtab = xCAT::Table->new("passwd");
     my @pws = $pwtab->getAllAttribs('key', 'username', 'password', 'cryptmethod', 'authdomain', 'comments', 'disable');
     foreach (@pws) {
-
-        # Look for the opapi entry in the passwd table
-        if ($_->{key} =~ "omapi") {    #omapi key
-                # save username and password for omapi connection
+        if ($_->{key} =~ "omapi") {
             $omapiuser = $_->{username};
             $omapikey  = $_->{password};
         }
     }
 
-    # Look through the networks table for networks with IPv6 format for address
+    my $usingipv6;
     my $nettab = xCAT::Table->new("networks");
     my @vnets = $nettab->getAllAttribs('net', 'mgtifname', 'mask', 'dynamicrange', 'nameservers', 'ddnsdomain', 'domain');
     foreach (@vnets) {
-        if ($_->{net} =~ /:/) {    #IPv6 detected
+        if ($_->{net} =~ /:/) {
             $usingipv6 = 1;
         }
     }
 
-    # open ipv4 omshell file handles - $OMOUT will contain the response
-    open2($OMOUT, $OMIN, "/usr/bin/omshell ");
-
-    # setup omapi for the connection and check for the node requested
-    print $OMIN "key "
-      . $omapiuser . " \""
-      . $omapikey . "\"\n";
-    print $OMIN "connect\n";
-    print $OMIN "new host\n";
-
-    # specify which node we are looking up
-    print $OMIN "set name = \"$node\"\n";
-    print $OMIN "open\n";
-
-    # the close will put the data into $OMOUT
-    print $OMIN "close\n";
-    close($OMIN);
-    my $name = 0;
-
-    # Process the output
-    while (<$OMOUT>) {    # now read the output of sort(1)
-        chomp $_;
-
-        # if this line contains the node name
-        if ($_ =~ $node) {
-
-            # save the name returned
-            if ($name) {
-                $nname = $_;
-                $nname =~ s/name = //;
-                $nname =~ s/"//g;
-            }
-            $name = 1;
-        }
-
-        # if this line is the hardware-address line
-        if ($_ =~ 'hardware-address') {
-
-            # save the hardware address as it is with the hardware-address label
-            $hwaddr = $_;
-        }
-
-        # if this line is the ip-address line
-        elsif ($_ =~ 'ip-address') {
-
-            # convert the hex IP address to a dotted decimal address for readability
-            my ($ipname, $ip) = split /= /, $_;
-            chomp($ip);
-            my ($p1, $p2, $p3, $p4) = split(/\:/, $ip);
-            my $dp1 = hex($p1);
-            my $dp2 = hex($p2);
-            my $dp3 = hex($p3);
-            my $dp4 = hex($p4);
-            $ipaddr = "ip-address = $dp1.$dp2.$dp3.$dp4";
-        }
-    }
-
-    # if we collected the ip address then print out the information for this node
+    my ($nname, $ipaddr, $hwaddr) = _omshell_query_host($node, $omapiuser, $omapikey, undef);
     if ($ipaddr) {
         push @{ $rsp->{data} }, "$nname: $ipaddr, $hwaddr";
         xCAT::MsgUtils->message("I", $rsp, $callback);
     }
-    close($OMOUT);
 
-    # if using IPv6 addresses check using omshell IPv6 port
     if ($usingipv6) {
-        open2($OMOUT6, $OMIN6, "/usr/bin/omshell ");
-        print $OMOUT6 "port 7912\n";
-        print $OMOUT6 "connect\n";
-        print $OMIN6 "key "
-          . $omapiuser . " \""
-          . $omapikey . "\"\n";
-        print $OMIN6 "connect\n";
-        print $OMIN6 "new host\n";
-
-        # check for the node specified
-        print $OMIN6 "set name = \"$node\"\n";
-        print $OMIN6 "open\n";
-        print $OMIN6 "close\n";
-        close($OMIN6);
-        $name   = 0;
-        $ipaddr = "";
-        while (<$OMOUT6>) {    # now read the output
-            chomp $_;
-            if ($_ =~ $node) {
-
-                # save the name
-                if ($name) {
-                    $nname = $_;
-                    $nname =~ s/name = //;
-                    $nname =~ s/"//g;
-                }
-                $name = 1;
-            }
-            if ($_ =~ 'hardware-address') {
-
-                # save the hardware-address
-                $hwaddr = $_;
-            }
-            elsif ($_ =~ 'ip-address') {
-
-                #save the ip address
-                my ($ipname, $ipaddr) = split /= /, $_;
-                chomp($ipaddr);
-            }
-        }
-
-        # print the information if the ip address is found
-        if ($ipaddr) {
-            push @{ $rsp->{data} }, "$nname: $ipaddr, $hwaddr";
+        my ($nname6, $ipaddr6, $hwaddr6) = _omshell_query_host($node, $omapiuser, $omapikey, 7912);
+        if ($ipaddr6) {
+            push @{ $rsp->{data} }, "$nname6: $ipaddr6, $hwaddr6";
             xCAT::MsgUtils->message("I", $rsp, $callback);
         }
-
-        # close the IPv6 output file handle
-        close($OMOUT6);
     }
 }
 

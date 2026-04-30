@@ -13,65 +13,81 @@ autoinstall:
     authorized-keys: []
     install-server: true
   apt:
-    primary:
-    - arches: [amd64, i386]
-      uri: https://mirror.pnl.gov/ubuntu/
+    fallback: offline-install
+    geoip: false
+    disable_suites:
+      - updates
+      - backports
+      - security
+  kernel:
+    package: linux-generic
   user-data:
     hostname: #HOSTNAME#
     disable_root: false
-    package_update: true
-    package_upgrade: true
+    package_update: false
+    package_upgrade: false
     timezone: #TABLE:site:key=timezone:value#
     chpasswd:
-      list:
-        - root:#CRYPT:passwd:key=system,username=root:password#
+      list: |
+        root:#CRYPT:passwd:key=system,username=root:password#
+      expire: false
   packages:
-    - bash
-    - nfs-common
-    - openssl
-    - isc-dhcp-client
-    - libc-bin
     - openssh-server
     - openssh-client
     - wget
-    - vim
-    - rsync
-    - busybox-static
-    - gawk
-    - dnsutils
-    - chrony
-    - gpg
   early-commands:
-    - '{
-    echo "Running install disk detection...";
-    wget http://#XCATVAR:XCATMASTER##COLONHTTPPORT#/install/autoinst/getinstdisk;
-    chmod u+x ./getinstdisk;
-    ./getinstdisk;
-    echo "Running early_command Installation script...";
-    wget http://#XCATVAR:XCATMASTER##COLONHTTPPORT#/install/autoinst/#HOSTNAME#.pre;
-    chmod u+x #HOSTNAME#.pre;
-    ./#HOSTNAME#.pre;
-    echo "Updating storage config...";
-    cat /autoinstall.yaml |head -n -1 > /tmp/autoinstall.yaml;
-    cat /tmp/partitionfile >> /tmp/autoinstall.yaml;
-    cat /tmp/autoinstall.yaml >/autoinstall.yaml;
-    echo "Disabling systemd-resolved...";
-    rm -f /etc/resolv.conf;
-    echo "nameserver #TABLE:noderes:$NODE:xcatmaster#" >/etc/resolv.conf;
-    echo "domain #TABLE:site:key=domain:value#" >>/etc/resolv.conf;
-    } >>/tmp/pre-install.log'
+    - |
+      exec >/tmp/pre-install.log 2>&1
+      set -eux
+      echo "=== xCAT early-commands ==="
+      echo "=== network ==="
+      ip addr show
+      ip route show
+      echo "=== disk detection ==="
+      wget -T 30 -O /tmp/getinstdisk http://#XCATVAR:XCATMASTER##COLONHTTPPORT#/install/autoinst/getinstdisk
+      test -s /tmp/getinstdisk
+      chmod u+x /tmp/getinstdisk
+      /tmp/getinstdisk
+      echo "=== pre-install script ==="
+      wget -T 30 -O /tmp/pre.sh http://#XCATVAR:XCATMASTER##COLONHTTPPORT#/install/autoinst/#HOSTNAME#.pre
+      test -s /tmp/pre.sh
+      chmod u+x /tmp/pre.sh
+      /tmp/pre.sh
+      echo "=== storage injection ==="
+      test -s /tmp/partitionfile
+      sed -i '/^\.\.\.$/d' /autoinstall.yaml
+      cat /tmp/partitionfile >> /autoinstall.yaml
+      echo "=== DNS setup ==="
+      rm -f /etc/resolv.conf
+      echo "nameserver #TABLE:noderes:$NODE:xcatmaster#" >/etc/resolv.conf
+      echo "domain #TABLE:site:key=domain:value#" >>/etc/resolv.conf
+      echo "=== early-commands complete ==="
   late-commands:
     - mkdir -p /target/var/log/xcat/
     - '{
     cat /tmp/pre-install.log >> /target/var/log/xcat/xcat.log;
+    installnic="#TABLE:noderes:$NODE:installnic#";
+    installmac="#TABLE:mac:$NODE:mac#";
+    installmac="$(printf ''%s'' "${installmac}" | tr ''A-F'' ''a-f'')";
+    mkdir -p /target/etc/netplan;
+    printf ''%s\n'' "network:" "  version: 2" "  ethernets:" "    xcat-install:" "      match:" "        macaddress: \"${installmac}\"" "      set-name: ${installnic}" "      dhcp4: true" >/target/etc/netplan/00-xcat-install.yaml;
+    chmod 600 /target/etc/netplan/00-xcat-install.yaml;
+    printf ''%s\n'' ''#HOSTNAME#'' >/target/etc/hostname;
+    if grep -q ''^127\.0\.1\.1'' /target/etc/hosts; then
+        sed -i ''s/^127\.0\.1\.1.*/127.0.1.1 #HOSTNAME#/'' /target/etc/hosts;
+    else
+        printf ''%s\n'' ''127.0.1.1 #HOSTNAME#'' >>/target/etc/hosts;
+    fi;
+    mkdir -p /target/etc/cloud;
+    touch /target/etc/cloud/cloud-init.disabled;
     echo "Updating kernel command line...";
-    echo "GRUB_CMDLINE_LINUX=\"#TABLE:bootparams:$NODE:kcmdline#\"" >>/target/etc/default/grub;
+    printf ''%s\n'' ''GRUB_CMDLINE_LINUX="#TABLEBLANKOKAY:bootparams:$NODE:kcmdline#"'' >>/target/etc/default/grub;
     curtin in-target --target /target update-grub2;
     echo "Running late_command Installation script...";
-    wget http://#XCATVAR:XCATMASTER##COLONHTTPPORT#/install/autoinst/#HOSTNAME#.post;
+    wget -T 30 http://#XCATVAR:XCATMASTER##COLONHTTPPORT#/install/autoinst/#HOSTNAME#.post;
     chmod u+x #HOSTNAME#.post;
     cp ./#HOSTNAME#.post /target/root/post.script;
     curtin in-target --target /target /root/post.script;
     } >>/target/var/log/xcat/xcat.log 2>&1'
   error-commands:
-    - tar -c --transform='s/^/#HOSTNAME#-logs\//' /var/crash /var/logs/installer |nc -l 8080
+    - tar -c --transform='s/^/#HOSTNAME#-logs\//' /var/crash /var/log/installer /tmp/pre-install.log /autoinstall.yaml 2>/dev/null |nc -l 8080

@@ -83,7 +83,10 @@ if [ -d "$NEWROOT/etc/sysconfig" -a ! -e "$NEWROOT/etc/sysconfig/selinux" ]; the
     echo "SELINUX=disabled" >> "$NEWROOT/etc/sysconfig/selinux"
 fi
 
-# inject new exit_if_exists
-echo 'settle_exit_if_exists="--exit-if-exists=/dev/root"; rm "$job"' > /initqueue/xcat.sh
-# force udevsettle to break
-> /initqueue/work
+# signal dracut to proceed with switch_root
+[ -e /dev/root ] || ln -s null /dev/root
+for HDIR in "" "/lib/dracut/hooks"; do
+    [ -d "${HDIR}/initqueue" ] || continue
+    echo 'settle_exit_if_exists="--exit-if-exists=/dev/root"; rm -f -- "$job"' > ${HDIR}/initqueue/xcat.sh
+    > ${HDIR}/initqueue/work
+done

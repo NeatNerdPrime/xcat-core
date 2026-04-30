@@ -1590,26 +1590,36 @@ sub setupNFSTree {
             shift @entries;
             if (grep /\Q$nfsdirectory\E/, @entries) {
                 $callback->({ data => ["$nfsdirectory has been exported already!"] });
-
-                # nothing to do
             } else {
-                $cmd = "/usr/sbin/exportfs :$nfsdirectory";
+                $cmd = "/usr/sbin/exportfs :$nfsdirectory -o rw,no_root_squash,sync,no_subtree_check,insecure";
                 xCAT::Utils->runcmd($cmd, 0);
-
-                # exportfs can export this directory immediately
                 $callback->({ data => ["now $nfsdirectory is exported!"] });
-                $cmd = "cat /etc/exports";
-                @entries = xCAT::Utils->runcmd($cmd, 0);
-                unless (my $entry = grep /\Q$nfsdirectory\E/, @entries) {
+            }
 
-                    #if there's no entry in /etc/exports, one with default options will be added
-                    $cmd = qq{echo "$nfsdirectory *(rw,no_root_squash,sync,no_subtree_check)" >> /etc/exports};
-                    xCAT::Utils->runcmd($cmd, 0);
-                    $callback->({ data => ["$nfsdirectory is added to /etc/exports with default option"] });
-                }
+            if (ensure_nfs_export_option($nfsdirectory, 'insecure')) {
+                xCAT::Utils->runcmd("/usr/sbin/exportfs -r", 0);
+                $callback->({ data => ["added insecure to existing $nfsdirectory export"] });
+            } elsif (!nfs_export_exists($nfsdirectory)) {
+                $cmd = qq{echo "$nfsdirectory *(rw,no_root_squash,sync,no_subtree_check,insecure)" >> /etc/exports};
+                xCAT::Utils->runcmd($cmd, 0);
+                $callback->({ data => ["$nfsdirectory is added to /etc/exports with default option"] });
             }
         }
     }
+}
+
+sub nfs_export_exists {
+    my ( $dir, %opts ) = _nfs_method_args(@_);
+    my @files = _nfs_export_files(%opts);
+    for my $file (@files) {
+        open(my $fh, '<', $file) or next;
+        while (<$fh>) {
+            next if /^\s*#/;
+            return 1 if /^\s*\Q$dir\E\s/;
+        }
+        close $fh;
+    }
+    return 0;
 }
 
 sub setupStatemnt {
@@ -1639,24 +1649,118 @@ sub setupStatemnt {
         if (grep /\Q$nfsdirectory\E/, @entries) {
             $callback->({ data => ["$nfsdirectory has been exported already!"] });
         } else {
-            $cmd = "/usr/sbin/exportfs :$nfsdirectory -o rw,no_root_squash,sync,no_subtree_check";
+            $cmd = "/usr/sbin/exportfs :$nfsdirectory -o rw,no_root_squash,sync,no_subtree_check,insecure";
             xCAT::Utils->runcmd($cmd, 0);
             $callback->({ data => ["now $nfsdirectory is exported!"] });
+        }
 
-            # add the directory into /etc/exports if not exist
-            $cmd = "cat /etc/exports";
-            @entries = xCAT::Utils->runcmd($cmd, 0);
-            if (my $entry = grep /\Q$nfsdirectory\E/, @entries) {
-                unless ($entry =~ m/rw/) {
-                    $callback->({ data => ["The $nfsdirectory should be with rw option in /etc/exports"] });
-                }
-            } else {
-                xCAT::Utils->runcmd(qq{echo "$nfsdirectory *(rw,no_root_squash,sync,no_subtree_check)" >>/etc/exports}, 0);
-                $callback->({ data => ["$nfsdirectory is added into /etc/exports with default options"] });
-            }
+        if (ensure_nfs_export_option($nfsdirectory, 'insecure')) {
+            xCAT::Utils->runcmd("/usr/sbin/exportfs -r", 0);
+            $callback->({ data => ["added insecure to existing $nfsdirectory export"] });
+        } elsif (!nfs_export_exists($nfsdirectory)) {
+            xCAT::Utils->runcmd(qq{echo "$nfsdirectory *(rw,no_root_squash,sync,no_subtree_check,insecure)" >>/etc/exports}, 0);
+            $callback->({ data => ["$nfsdirectory is added into /etc/exports with default options"] });
         }
     }
 
+}
+
+sub ensure_nfs_export_option {
+    my ( $dir, @args ) = _nfs_method_args(@_);
+    local @_ = @args;
+    my $option = shift || 'insecure';
+    my %opts = @_;
+    my @files = _nfs_export_files(%opts);
+    my $changed = 0;
+    for my $file (@files) {
+        open(my $fh, '<', $file) or next;
+        my @raw = <$fh>;
+        close $fh;
+
+        my @logical;
+        my $buf = '';
+        for my $r (@raw) {
+            chomp $r;
+            if ($r =~ s/\s*\\$//) {
+                $buf .= "$r ";
+                next;
+            }
+            $buf .= $r;
+            push @logical, $buf;
+            $buf = '';
+        }
+        push @logical, $buf if $buf ne '';
+
+        my $file_changed = 0;
+        for my $line (@logical) {
+            next if $line =~ /^\s*#/;
+            next unless $line =~ /^\s*\Q$dir\E\s/;
+            my $line_changed = 0;
+            my $comment = '';
+            $comment = " $1" if $line =~ s/\s+(#.*)$//;
+            my $tail = $line;
+            $tail =~ s/^\s*\Q$dir\E\s+//;
+            my @tokens;
+            while ($tail =~ /(\S+(?:\([^)]*\))?)/g) {
+                push @tokens, $1;
+            }
+            my @out;
+            for my $tok (@tokens) {
+                if ($tok =~ /^-(.+)/) {
+                    my $opts = $1;
+                    unless (_option_list_has($opts, $option)) {
+                        $tok = "-$opts,$option";
+                        $line_changed = 1;
+                    }
+                } elsif ($tok =~ /^([^(]+)\(([^)]*)\)$/) {
+                    my ($client, $opts) = ($1, $2);
+                    unless (_option_list_has($opts, $option)) {
+                        $tok = "$client($opts,$option)";
+                        $line_changed = 1;
+                    }
+                } else {
+                    $tok = "$tok($option)";
+                    $line_changed = 1;
+                }
+                push @out, $tok;
+            }
+            if ($line_changed) {
+                $line = "$dir " . join(" ", @out) . "$comment";
+                $file_changed = 1;
+            }
+        }
+        if ($file_changed) {
+            open(my $wfh, '>', $file) or next;
+            print $wfh map { "$_\n" } @logical;
+            close $wfh;
+            $changed = 1;
+        }
+    }
+    return $changed;
+}
+
+sub _nfs_method_args {
+    my @args = @_;
+    shift @args if @args && (ref($args[0]) || $args[0] eq __PACKAGE__);
+    return @args;
+}
+
+sub _nfs_export_files {
+    my %opts = @_;
+    return @{ $opts{files} } if ref($opts{files}) eq 'ARRAY';
+
+    my @files = ('/etc/exports');
+    push @files, glob('/etc/exports.d/*.exports') if -d '/etc/exports.d';
+    return @files;
+}
+
+sub _option_list_has {
+    my ($list, $option) = @_;
+    foreach my $item (split /,/, $list) {
+        $item =~ s/^\s+|\s+$//g;
+        return 1 if $item eq $option;
+    }
+    return 0;
 }
 
 #-------------------------------------------------------------------------------------------

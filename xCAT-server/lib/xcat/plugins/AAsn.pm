@@ -12,6 +12,7 @@ use strict;
 use xCAT::Table;
 
 use xCAT::Utils;
+use xCAT::SvrUtils;
 use xCAT::TableUtils;
 use xCAT::NetworkUtils;
 use xCAT::DHCP::Backend;
@@ -398,15 +399,11 @@ sub setupInstallloc
                 #  add /install to /etc/exports - if needed
                 #
 
-                my $cmd = "/bin/cat /etc/exports | grep '$installdir'";
-                my $outref = xCAT::Utils->runcmd("$cmd", -1);
                 my $changed_exports;
-                if ($::RUNCMD_RC != 0)
+                if (!xCAT::SvrUtils->nfs_export_exists($installdir))
                 {
-
-                    # ok - then add this entry
                     my $cmd =
-"/bin/echo '$installdir *(rw,no_root_squash,sync,no_subtree_check)' >> /etc/exports";
+"/bin/echo '$installdir *(rw,no_root_squash,sync,no_subtree_check,insecure)' >> /etc/exports";
                     my $outref = xCAT::Utils->runcmd("$cmd", 0);
                     if ($::RUNCMD_RC != 0)
                     {
@@ -418,11 +415,16 @@ sub setupInstallloc
                         $changed_exports++;
                     }
                 }
+                else
+                {
+                    if (xCAT::SvrUtils->ensure_nfs_export_option($installdir, 'insecure'))
+                    {
+                        $changed_exports++;
+                    }
+                }
 
                 if ($changed_exports)
                 {
-
-                    # restart nfs
                     &setup_NFS($nodename);
 
                     my $cmd = "/usr/sbin/exportfs -a";
@@ -431,7 +433,6 @@ sub setupInstallloc
                     {
                         xCAT::MsgUtils->message('S', "Error with $cmd.");
                     }
-
                 }
             }
         }

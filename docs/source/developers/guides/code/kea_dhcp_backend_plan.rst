@@ -290,7 +290,7 @@ Unit tests:
 * host reservation formatting
 * subnet and pool mapping
 * Kea reservation policy flags for subnet reservations and out-of-pool-only
-  overrides
+  overrides, plus DHCPv4 ``match-client-id`` behavior
 * backend selection and override behavior
 
 Configuration validation tests:
@@ -319,6 +319,8 @@ Integration matrix:
 * EL9 plus ISC
 * EL9 plus forced Kea
 * EL10 plus Kea
+* Ubuntu 18.04 plus ISC
+* Ubuntu 20.04 plus ISC
 * Ubuntu 22.04 plus Kea
 * Ubuntu 24.04 plus Kea
 
@@ -353,7 +355,8 @@ ordinary containers.
 Open test infrastructure details to confirm:
 
 * SSH access method and user for ``rome01.local.versatushpc.com.br``
-* available base images for EL9, EL10, Ubuntu 22.04, and Ubuntu 24.04
+* available base images for EL9, EL10, Ubuntu 18.04, Ubuntu 20.04, Ubuntu
+  22.04, and Ubuntu 24.04
 * libvirt network names and whether isolated DHCP test networks are already
   available
 * whether nested or privileged test guests can run DHCP client and PXE tests

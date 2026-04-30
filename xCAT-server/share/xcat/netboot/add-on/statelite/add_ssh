@@ -40,7 +40,10 @@ then
 	sed -i 's/^X11Forwarding .*$/X11Forwarding yes/' $ROOTDIR/etc/ssh/sshd_config
 	sed -i 's/^KeyRegenerationInterval .*$/KeyRegenerationInterval 0/' $ROOTDIR/etc/ssh/sshd_config
 	sed -i 's/\(.*MaxStartups.*\)/#\1/' $ROOTDIR/etc/ssh/sshd_config
-	echo "MaxStartups 1024" >>$ROOTDIR/etc/ssh/sshd_config
+	# Keep the unauthenticated connection limit below systemd's default
+	# 1024 soft open-file limit.  Ubuntu 22.04 OpenSSH can otherwise spin
+	# in ppoll() before sending the SSH banner.
+	echo "MaxStartups 100:30:200" >>$ROOTDIR/etc/ssh/sshd_config
 fi
 
 if [ -r $ROOTDIR/etc/ssh/sshd_config ]
@@ -75,6 +78,5 @@ cp /root/.ssh/config $ROOTDIR/root/.ssh/config
 chmod 600 $ROOTDIR/root/.ssh/config
 
 #chroot $ROOTDIR ssh-keygen -y -f /root/.ssh/id_rsa >/root/.ssh/id_rsa.pub
-
 
 

@@ -1132,17 +1132,23 @@ sub mirrorspec {
             if (!$pkgdir) {
                 $pkgdir = $_;
             } else {
-                my $osuurl = "http://" . $masternode.':'.$ENV{httpport} . $_ . " ./";
+                my $httpport = $ENV{HTTPPORT} || $ENV{httpport} || '80';
+                my $osuurl = "http://" . $masternode . ':' . $httpport . $_ . " ./";
                 push @mirrors, $osuurl;
             }
         }
     }
 
     if ($pkgdir) {
+        my $httpport = $ENV{HTTPPORT} || $ENV{httpport} || '80';
+        my $security_host = $masternode;
+        $security_host .= ':' . $httpport if $httpport ne '80';
         $line .= "
 d-i mirror/country string manual\n
 d-i mirror/protocol string http\n
 d-i mirror/http/directory string $pkgdir\n
+d-i apt-setup/security_host string $security_host\n
+d-i apt-setup/security_path string $pkgdir\n
 d-i mirror/http/proxy string\n";
     }
 
