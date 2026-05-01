@@ -209,6 +209,16 @@ is( $reservation_policy_config->{Dhcp4}{'reservations-in-subnet'}, JSON::false, 
 is( $reservation_policy_config->{Dhcp4}{'reservations-out-of-pool'}, JSON::false, 'reservation out-of-pool policy can be overridden' );
 is( $reservation_policy_config->{Dhcp4}{'match-client-id'}, JSON::true, 'client-id lease matching policy can be overridden' );
 
+my $client_id_policy_json = $backend->render_dhcp4_config(
+    {
+        interfaces        => ['eth0'],
+        match_client_id   => 1,
+        subnets           => [],
+    }
+);
+my $client_id_policy_config = decode_json($client_id_policy_json);
+is( $client_id_policy_config->{Dhcp4}{'match-client-id'}, JSON::true, 'DHCPv4 client-id matching can be explicitly restored' );
+
 my $comment_dir = tempdir(CLEANUP => 1);
 my $commented_config = "$comment_dir/kea-dhcp4.conf";
 my $commented_content = <<'COMMENTED_JSON';
@@ -220,9 +230,21 @@ my $commented_content = <<'COMMENTED_JSON';
       {
         "id": 1,
         "subnet": "10.20.0.0/24",
-        "pools": [] // Keep URLs such as "http://server/path" intact.
+        "pools": [], // Keep URLs such as "http://server/path" intact.
       }
-    ]
+    ],
+    "loggers": [
+      {
+        "name": "kea-dhcp4",
+        "output-options": [
+          {
+            "output": "stdout",
+            "pattern": "%-5p %m\n",
+            // "flush": false
+          },
+        ],
+      },
+    ],
   }
 }
 COMMENTED_JSON
@@ -373,6 +395,27 @@ is( $ddns_config->{DhcpDdns}{'forward-ddns'}{'ddns-domains'}[0]{name}, 'cluster.
 
 my $ctrl_agent_config = decode_json($backend->render_ctrl_agent_config({ 'http-port' => '8000' }));
 is( $ctrl_agent_config->{'Control-agent'}{'http-port'}, 8000, 'Control Agent HTTP port is numeric' );
+
+my $runtime_socket_dir = "$unit_dir/run/kea";
+mkdir "$unit_dir/run" or die "Unable to create $unit_dir/run: $!";
+mkdir $runtime_socket_dir or die "Unable to create $runtime_socket_dir: $!";
+
+my $runtime_socket_backend = xCAT::DHCP::Backend::Kea->new( kea_socket_dirs => [ $runtime_socket_dir, "$unit_dir/var/run/kea" ] );
+my $runtime_socket_config = decode_json($runtime_socket_backend->render_ctrl_agent_config({}));
+is( $runtime_socket_config->{'Control-agent'}{'control-sockets'}{dhcp4}{'socket-name'}, "$runtime_socket_dir/kea4-ctrl-socket", 'Control Agent socket uses the detected runtime directory' );
+
+my $legacy_socket_backend = xCAT::DHCP::Backend::Kea->new( kea_socket_dirs => [] );
+my $legacy_socket_config = decode_json($legacy_socket_backend->render_ctrl_agent_config({}));
+is( $legacy_socket_config->{'Control-agent'}{'control-sockets'}{dhcp4}{'socket-name'}, '/var/run/kea/kea4-ctrl-socket', 'Control Agent socket falls back to the legacy runtime path when no runtime directory exists' );
+
+my $socket_backend = xCAT::DHCP::Backend::Kea->new( kea_socket_dir => '/run/kea' );
+my $ctrl_agent_socket_config = decode_json($socket_backend->render_ctrl_agent_config({ dhcp6 => 1, ddns => 1 }));
+is( $ctrl_agent_socket_config->{'Control-agent'}{'control-sockets'}{dhcp4}{'socket-name'}, '/run/kea/kea4-ctrl-socket', 'Control Agent DHCPv4 socket uses the detected Kea socket directory' );
+is( $ctrl_agent_socket_config->{'Control-agent'}{'control-sockets'}{dhcp6}{'socket-name'}, '/run/kea/kea6-ctrl-socket', 'Control Agent DHCPv6 socket uses the detected Kea socket directory' );
+is( $ctrl_agent_socket_config->{'Control-agent'}{'control-sockets'}{d2}{'socket-name'}, '/run/kea/kea-ddns-ctrl-socket', 'Control Agent DDNS socket uses the detected Kea socket directory' );
+
+my $explicit_socket_config = decode_json($socket_backend->render_ctrl_agent_config({ 'dhcp4-socket' => '/tmp/kea4.sock' }));
+is( $explicit_socket_config->{'Control-agent'}{'control-sockets'}{dhcp4}{'socket-name'}, '/tmp/kea4.sock', 'explicit Control Agent socket path overrides the default' );
 
 my @commands;
 my $ca_backend = xCAT::DHCP::Backend::Kea->new(

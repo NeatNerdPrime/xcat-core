@@ -154,19 +154,19 @@ sub render_ctrl_agent_config {
     my %sockets = (
         dhcp4 => {
             'socket-type' => 'unix',
-            'socket-name' => $intent->{'dhcp4-socket'} || '/var/run/kea/kea4-ctrl-socket',
+            'socket-name' => $intent->{'dhcp4-socket'} || $self->_kea_control_socket('kea4-ctrl-socket'),
         },
     );
     if ( $intent->{dhcp6} || $intent->{'dhcp6-socket'} ) {
         $sockets{dhcp6} = {
             'socket-type' => 'unix',
-            'socket-name' => $intent->{'dhcp6-socket'} || '/var/run/kea/kea6-ctrl-socket',
+            'socket-name' => $intent->{'dhcp6-socket'} || $self->_kea_control_socket('kea6-ctrl-socket'),
         };
     }
     if ( $intent->{ddns} || $intent->{'ddns-socket'} ) {
         $sockets{d2} = {
             'socket-type' => 'unix',
-            'socket-name' => $intent->{'ddns-socket'} || '/var/run/kea/kea-ddns-ctrl-socket',
+            'socket-name' => $intent->{'ddns-socket'} || $self->_kea_control_socket('kea-ddns-ctrl-socket'),
         };
     }
 
@@ -218,7 +218,7 @@ sub load_dhcp4_config {
     my $content = <$fh>;
     close($fh);
 
-    my $json = eval { decode_json( _strip_json_comments($content) ) };
+    my $json = eval { _decode_kea_json($content) };
     return { error => "Unable to parse $path as JSON: $@" } if $@;
 
     $json->{Dhcp4}{subnet4} ||= [];
@@ -236,7 +236,7 @@ sub load_dhcp6_config {
     my $content = <$fh>;
     close($fh);
 
-    my $json = eval { decode_json( _strip_json_comments($content) ) };
+    my $json = eval { _decode_kea_json($content) };
     return { error => "Unable to parse $path as JSON: $@" } if $@;
 
     $json->{Dhcp6}{subnet6} ||= [];
@@ -334,6 +334,15 @@ sub encode_config {
     return JSON->new->canonical->pretty->encode($config);
 }
 
+sub _decode_kea_json {
+    my ($content) = @_;
+
+    # Kea accepts JSON with C/C++ comments and trailing commas. JSON->relaxed
+    # is backend-dependent, so normalize these Kea extensions explicitly before
+    # handing the content to the strict decoder.
+    return decode_json( _strip_json_trailing_commas( _strip_json_comments($content) ) );
+}
+
 sub _strip_json_comments {
     my ($content) = @_;
 
@@ -387,6 +396,48 @@ sub _strip_json_comments {
     return $out;
 }
 
+sub _strip_json_trailing_commas {
+    my ($content) = @_;
+
+    my $out = '';
+    my $in_string = 0;
+    my $escaped = 0;
+    my $length = length($content);
+
+    for ( my $idx = 0; $idx < $length; $idx++ ) {
+        my $char = substr( $content, $idx, 1 );
+
+        if ($in_string) {
+            $out .= $char;
+            if ($escaped) {
+                $escaped = 0;
+            } elsif ($char eq '\\') {
+                $escaped = 1;
+            } elsif ($char eq '"') {
+                $in_string = 0;
+            }
+            next;
+        }
+
+        if ($char eq '"') {
+            $in_string = 1;
+            $out .= $char;
+            next;
+        }
+
+        if ($char eq ',') {
+            my $lookahead = $idx + 1;
+            $lookahead++ while $lookahead < $length && substr( $content, $lookahead, 1 ) =~ /\s/;
+            my $next = $lookahead < $length ? substr( $content, $lookahead, 1 ) : '';
+            next if $next eq '}' || $next eq ']';
+        }
+
+        $out .= $char;
+    }
+
+    return $out;
+}
+
 sub write_ctrl_agent_config {
     my ( $self, $intent, %opts ) = @_;
 
@@ -425,7 +476,17 @@ sub _validate_config_with {
     my $kea = _command_path($command);
     return { error => "Unable to validate $label configuration: $command was not found." } unless $kea;
 
-    my $cmd = "$kea -t " . _shell_quote($path) . " 2>&1";
+    my $prefix = '';
+    if ( $> == 0 ) {
+        my $kea_user = _kea_user();
+        my $runuser  = _command_path('runuser');
+        # Validate as the daemon user when possible so root does not hide
+        # packaged Kea runtime-directory or config-readability failures.
+        $prefix = _shell_quote($runuser) . ' -u ' . _shell_quote($kea_user) . ' -- '
+          if $kea_user && $runuser;
+    }
+
+    my $cmd = $prefix . _shell_quote($kea) . " -t " . _shell_quote($path) . " 2>&1";
     my $output = `$cmd`;
     my $rc = $? >> 8;
     return { error => "$label configuration validation failed: $output" } if $rc != 0;
@@ -918,6 +979,15 @@ sub _kea_group {
     return;
 }
 
+sub _kea_user {
+    foreach my $user ( 'kea', '_kea' ) {
+        my @entry = getpwnam($user);
+        return $entry[0] if @entry;
+    }
+
+    return;
+}
+
 sub _kea_service {
     my ( $self, $service ) = @_;
 
@@ -951,6 +1021,28 @@ sub _systemd_unit_dirs {
         '/usr/lib/systemd/system',
         '/lib/systemd/system',
     ];
+}
+
+sub _kea_socket_dir {
+    my ($self) = @_;
+
+    return $self->{kea_socket_dir} if defined $self->{kea_socket_dir};
+
+    # Kea validates Control Agent sockets against its packaged runtime
+    # directory, and newer packages reject /var/run/kea even when it resolves
+    # to /run/kea. Keep the legacy path as the unknown-state fallback for
+    # older Kea builds that validate before the runtime directory exists.
+    foreach my $dir ( @{ $self->{kea_socket_dirs} || [ '/run/kea', '/var/run/kea' ] } ) {
+        return $dir if -d $dir;
+    }
+
+    return '/var/run/kea';
+}
+
+sub _kea_control_socket {
+    my ( $self, $socket_name ) = @_;
+
+    return $self->_kea_socket_dir() . "/$socket_name";
 }
 
 sub _command_path {

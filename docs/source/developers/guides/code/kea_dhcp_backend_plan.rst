@@ -310,7 +310,7 @@ Backend selection tests:
 * ``auto`` uses ISC on EL9
 * ``auto`` uses ISC on Ubuntu 20.04
 * ``auto`` uses Kea on EL10
-* ``auto`` uses Kea on Ubuntu 22.04 and Ubuntu 24.04
+* ``auto`` uses Kea on Ubuntu 22.04 and newer
 * forced ``kea`` works on EL9 when Kea packages are installed
 * forced unavailable backend fails clearly
 
@@ -323,6 +323,7 @@ Integration matrix:
 * Ubuntu 20.04 plus ISC
 * Ubuntu 22.04 plus Kea
 * Ubuntu 24.04 plus Kea
+* Ubuntu 26.04 plus Kea
 
 Semantic parity tests:
 
@@ -348,21 +349,18 @@ Test Infrastructure
 -------------------
 
 Existing container-based EL8, EL9, and EL10 tests should be extended for backend
-coverage. The libvirt/KVM infrastructure on ``rome01.local.versatushpc.com.br``
-can be used for network and PXE smoke tests that are difficult to validate in
-ordinary containers.
+coverage. Libvirt/KVM infrastructure can be used for network and PXE smoke
+tests that are difficult to validate in ordinary containers.
 
 Open test infrastructure details to confirm:
 
-* SSH access method and user for ``rome01.local.versatushpc.com.br``
 * available base images for EL9, EL10, Ubuntu 18.04, Ubuntu 20.04, Ubuntu
-  22.04, and Ubuntu 24.04
+  22.04, Ubuntu 24.04, and Ubuntu 26.04
 * libvirt network names and whether isolated DHCP test networks are already
   available
 * whether nested or privileged test guests can run DHCP client and PXE tests
 * cleanup expectations for temporary VMs, networks, and storage volumes
-* the ``builder`` account and ``id_ed25519_reposync`` SSH key are available for
-  repeatable validation access
+* repeatable validation access method and credentials
 
 Manual Validation Snapshot
 --------------------------

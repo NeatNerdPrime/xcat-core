@@ -37,6 +37,8 @@ my $key;
 my $field;
 my $idir;
 my $node;
+my $master;
+my $httpportsuffix;
 my %loggedrealms;
 my $lastmachinepassdata;
 my $localadminenabled; #indicate whether Windows template has local logins enabled or not
@@ -86,7 +88,7 @@ sub subvars {
     ## 1, the "xcatmaster" attribute of the node
     ## 2, the ip address of the mn/sn facing the compute node
     ## 3, the site.master
-    my $master;
+    $master = undef;
 
     #the "xcatmaster" attribute of the node
     if ($tmpl_hash->{'xcatmaster'}) {
@@ -146,7 +148,7 @@ sub subvars {
     }
     $ENV{HTTPPORT} = $httpport;
 
-    my $httpportsuffix=":$httpport";
+    $httpportsuffix=":$httpport";
     #replace the env with the right value so that correct include files can be found
     $inc =~ s/#ENV:([^#]+)#/envvar($1)/eg;
     my $res;
@@ -364,6 +366,7 @@ sub subvars {
             $inc =~ s/#INSTALL_SOURCES_IN_PRE#/$source_in_pre/g;
             if (("ubuntu" eq $platform) || ("debian" eq $platform)) {
                 $inc =~ s/#INCLUDE_OSIMAGE_PKGDIR#/$pkgdirs[-1]/;
+                $inc =~ s/#UBUNTU_SUBIQUITY_APT_CONFIG#/ubuntu_subiquity_apt_config($media_dir)/eg;
             }
             $inc =~ s/#WRITEREPO#/$writerepo/g;
         }
@@ -376,8 +379,10 @@ sub subvars {
         $inc =~ s/#INCLUDE_NOP:([^#^\n]+)#/includefile($1,1,0)/eg;
         $inc =~ s/#XCATVAR:([^#]+)#/envvar($1)/eg;
         $inc =~ s/#ENV:([^#]+)#/envvar($1)/eg;
+        $inc =~ s/#UBUNTU_SUBIQUITY_APT_CONFIG#/ubuntu_subiquity_apt_config($media_dir)/eg;
         $inc =~ s/#MACHINEPASSWORD#/machinepassword()/eg;
         $inc =~ s/#CRYPT:([^:]+):([^:]+):([^#]+)#/crydb($1,$2,$3)/eg;
+        $inc =~ s/#CRYPTORLOCKED:([^:]+):([^:]+):([^#]+)#/crydb_or_locked($1,$2,$3)/eg;
         $inc =~ s/#COMMAND:([^#]+)#/command($1)/eg;
         $inc =~ s/#KICKSTARTNET#/kickstartnetwork()/eg;
         $inc =~ s/#MIRRORSPEC#/mirrorspec()/eg;
@@ -1645,6 +1650,158 @@ sub crydb
     return undef if (!defined($kp));
     return '*' if ($::XCATSITEVALS{secureroot} eq "1");
     return xCAT::PasswordUtils::crypt_system_password($table, $kp, \@fields);
+}
+
+sub crydb_or_locked
+{
+    my ( $table, $key, $field ) = @_;
+    my $crypted = crydb( $table, $key, $field );
+    return $crypted if defined($crypted) && length($crypted);
+    return '*';
+}
+
+sub ubuntu_subiquity_apt_config
+{
+    my ($media_dir) = @_;
+    my $use_deb822 = ubuntu_subiquity_uses_deb822_sources($media_dir);
+    my @otherpkg_sources = ubuntu_subiquity_otherpkg_sources();
+
+    my @lines = (
+        '  apt:',
+        '    preserve_sources_list: false',
+        '    fallback: offline-install',
+        '    geoip: false',
+        '    disable_suites:',
+        '      - updates',
+        '      - backports',
+        '      - security',
+    );
+
+    if ($use_deb822) {
+        if (ubuntu_subiquity_uses_generated_cdrom_source($media_dir)) {
+            # Ubuntu 26.04 and newer Subiquity overlays provide cdrom.sources.
+            # Rendering a second file:///cdrom source triggers apt option conflicts.
+            # Curtin still requires a valid Deb822 template, so write an inactive source.
+            push @lines, '    sources_list: |';
+            push @lines, '      Types: deb';
+            push @lines, '      URIs: http://xcat.invalid/disabled';
+            push @lines, '      Suites: $RELEASE';
+            push @lines, '      Components: main';
+            push @lines, '      Enabled: no';
+        } else {
+            push @lines, '    sources_list: |';
+            push @lines, '      Types: deb';
+            push @lines, '      URIs: file:///cdrom';
+            push @lines, '      Suites: $RELEASE';
+            push @lines, '      Components: main universe restricted multiverse';
+            push @lines, '      Check-Date: no';
+        }
+
+        foreach my $source (@otherpkg_sources) {
+            push @lines, '';
+            push @lines, '      Types: deb';
+            push @lines, "      URIs: $source";
+            push @lines, '      Suites: ./';
+            push @lines, '      Components:';
+            push @lines, '      Trusted: yes';
+        }
+    } else {
+        push @lines, '    mirror-selection:';
+        push @lines, '      primary:';
+        push @lines, '      - uri: file:/cdrom';
+
+        if (@otherpkg_sources) {
+            push @lines, '    sources:';
+            my $index = 0;
+            foreach my $source (@otherpkg_sources) {
+                push @lines, "      xcat-otherpkgs-$index.list:";
+                push @lines, qq(        source: "deb [trusted=yes] $source ./");
+                $index++;
+            }
+        }
+    }
+
+    return join( "\n", @lines );
+}
+
+sub ubuntu_subiquity_otherpkg_sources
+{
+    my $nodetype_tab = xCAT::Table->new('nodetype');
+    return unless $nodetype_tab;
+
+    my $nodetype_ent = $nodetype_tab->getNodeAttribs( $node, ['provmethod'] );
+    return unless $nodetype_ent && $nodetype_ent->{provmethod};
+
+    my $linuximage_tab = xCAT::Table->new('linuximage');
+    return unless $linuximage_tab;
+
+    my $linuximage_ent = $linuximage_tab->getAttribs( { imagename => $nodetype_ent->{provmethod} }, 'otherpkgdir' );
+    return unless $linuximage_ent && $linuximage_ent->{otherpkgdir};
+
+    my @sources;
+    foreach my $otherpkgdir ( split( /,/, $linuximage_ent->{otherpkgdir} ) ) {
+        $otherpkgdir =~ s/^\s+|\s+$//g;
+        next unless $otherpkgdir;
+        next if $otherpkgdir !~ m{^https?://} && !ubuntu_subiquity_local_apt_repo($otherpkgdir);
+
+        my $uri = ubuntu_subiquity_pkgdir_uri($otherpkgdir);
+        push @sources, $uri;
+    }
+
+    return @sources;
+}
+
+sub ubuntu_subiquity_uses_deb822_sources
+{
+    my ($media_dir) = @_;
+    my $release = ubuntu_subiquity_release($media_dir);
+
+    return 1 if $release =~ m{ubuntu([2-9][4-9]|[3-9][0-9])\.\d+};
+    return 0;
+}
+
+sub ubuntu_subiquity_uses_generated_cdrom_source
+{
+    my ($media_dir) = @_;
+    my $release = ubuntu_subiquity_release($media_dir);
+
+    return 1 if $release =~ m{ubuntu([2-9][6-9]|[3-9][0-9])\.\d+};
+    return 0;
+}
+
+sub ubuntu_subiquity_release
+{
+    my ($media_dir) = @_;
+    my $release = $media_dir || '';
+
+    if ( !$release ) {
+        my $nodetype_tab = xCAT::Table->new('nodetype');
+        my $nodetype_ent = $nodetype_tab ? $nodetype_tab->getNodeAttribs( $node, ['os'] ) : undef;
+        $release = $nodetype_ent->{os} if $nodetype_ent && $nodetype_ent->{os};
+    }
+
+    return $release;
+}
+
+sub ubuntu_subiquity_local_apt_repo
+{
+    my ($path) = @_;
+    return 0 unless $path && -d $path;
+    return 1 if ( -f "$path/Packages" || -f "$path/Packages.gz" ) && -f "$path/Release";
+    return 0;
+}
+
+sub ubuntu_subiquity_pkgdir_uri
+{
+    my ($path) = @_;
+    $path ||= '/install';
+    $path =~ s/\s+$//;
+    $path =~ s{/+$}{};
+
+    return $path if $path =~ m{^https?://};
+
+    $path = "/$path" if $path !~ m{^/};
+    return "http://$master$httpportsuffix$path";
 }
 
 sub tabdb

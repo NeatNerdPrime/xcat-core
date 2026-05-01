@@ -104,8 +104,8 @@ for package in ${packages[@]}; do
     fi
 done
 
-# Supported distributions
-dists="saucy trusty utopic xenial bionic focal jammy"
+# Supported distributions. Set DISTS="jammy noble resolute" to limit local validation builds.
+dists="${DISTS:-saucy trusty utopic xenial bionic focal jammy noble resolute}"
 
 c_flag=            # xcat-core (trunk-delvel) path
 d_flag=            # xcat-dep (trunk) path

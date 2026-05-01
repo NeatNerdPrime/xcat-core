@@ -273,7 +273,7 @@ unless ($onlyinitrd) {
     open($aptconfig, ">", "/tmp/genimage.$$.apt.list");
     my $repnum = 0;
     foreach $tmpsrcdir (@aptdirs) {
-        print $aptconfig "deb file://$tmpsrcdir main stable\n\n";
+        print $aptconfig "deb [trusted=yes] file://$tmpsrcdir main stable\n\n";
         $repnum += 1;
     }
     $repnum -= 1;
@@ -357,14 +357,18 @@ unless ($onlyinitrd) {
     open($aptconfig, ">", "$rootimg_dir/etc/apt/sources.list");
 
     if ($srcdir) {
-        print $aptconfig "deb http://$masternode:$httpport$srcdir $dist main restricted universe\n";
+        print $aptconfig "deb [trusted=yes] http://$masternode:$httpport$srcdir $dist main restricted universe\n";
     }
 
     foreach (@pkgdir_internet) {
         print $aptconfig "deb $_\n";
     }
     foreach (@pkgdir_local) {
-        print $aptconfig "deb $_\n";
+        if (/^(http:\/\/\S+)\s+(\S.*)$/) {
+            print $aptconfig "deb [trusted=yes] $1 $2\n";
+        } else {
+            print $aptconfig "deb $_\n";
+        }
     }
 
     close($aptconfig);
@@ -1254,10 +1258,10 @@ for i in `cat /proc/cmdline`; do
 done
 
 if [ -z "\$IFACE" ]; then
-    if iface_exists "\$BOOTIF"; then
-        IFACE=\$BOOTIF
-    elif iface_exists "\$NETDEV"; then
+    if iface_exists "\$NETDEV"; then
         IFACE=\$NETDEV
+    elif iface_exists "\$BOOTIF"; then
+        IFACE=\$BOOTIF
     elif iface_exists "\$PRINIC"; then
         IFACE=\$PRINIC
     else
