@@ -285,6 +285,10 @@ sub process_request {
     if ($osfamily =~ /sles/ && $osfamily =~ /sp/) {
         $osfamily = "sles";
     }
+    # openSUSE Leap 15.x reuses the existing SLES diskless image scripts.
+    if ($osver =~ /^leap15/) {
+        $osfamily = "sles";
+    }
 
     $osfamily =~ s/ //g;
 

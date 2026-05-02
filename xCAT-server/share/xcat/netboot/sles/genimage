@@ -909,7 +909,9 @@ unless (-l "$rootimg_dir/var/lib/dhcpcd") {
 }
 
 #keyctl moved to /bin for newer release
-system("cd $rootimg_dir/usr/bin/; ln -s ../../bin/keyctl $rootimg_dir/usr/bin/keyctl");
+unless (-e "$rootimg_dir/usr/bin/keyctl") {
+    system("cd $rootimg_dir/usr/bin/; ln -s ../../bin/keyctl $rootimg_dir/usr/bin/keyctl");
+}
 
 # which is different from the Redhat family
 
@@ -933,10 +935,15 @@ if (@new_order) {
 }
 
 # add drivers for local disk support
-push @ndrivers, ("ext3.ko", "ext4.ko", "virtio_pci.ko", "virtio_blk.ko", "libata.ko", "scsi_mod.ko", "scsi_dh.ko", "ahci.ko", "megaraid_sas.ko", "sd_mod.ko");
+push @ndrivers, ("ext3.ko", "ext4.ko", "virtio_pci.ko", "virtio_blk.ko", "libata.ko", "scsi_mod.ko", "ahci.ko", "megaraid_sas.ko", "sd_mod.ko");
+if (glob("$rootimg_dir/lib/modules/$kernelver/kernel/drivers/scsi/device_handler/scsi_dh.ko*")) {
+    push @ndrivers, "scsi_dh.ko";
+}
 
 if ($osver_host >= 12) {
-    push @ndrivers, ("ibmvscsi.ko");
+    if ($arch =~ /ppc/) {
+        push @ndrivers, ("ibmvscsi.ko");
+    }
 } else {    # for sles11 or lower
     push @ndrivers, ("ibmvscsic.ko", "ata_piix.ko", "pcieport.ko");
 }
@@ -2124,9 +2131,17 @@ sub generic_post { # This function is meant to leave the image in a state approx
 
     foreach my $service (@services) {
         my $cmd = "chroot $rootimg_dir ";
-        if (-r "$rootimg_dir/etc/init.d/$service") {
+        if ((-r "$rootimg_dir/etc/init.d/$service") && (-x "$rootimg_dir/sbin/insserv")) {
             $cmd = $cmd . "insserv -f $service";
             system("$cmd");
+        } elsif (($service eq "network") && (-r "$rootimg_dir/usr/lib/systemd/system/wicked.service")) {
+            $cmd = $cmd . "systemctl enable wicked.service";
+            system("$cmd");
+        } elsif (-r "$rootimg_dir/usr/lib/systemd/system/$service.service") {
+            $cmd = $cmd . "systemctl enable $service.service";
+            system("$cmd");
+        } elsif (-r "$rootimg_dir/etc/init.d/$service") {
+            print "[genimage] skipping $service init script enablement because insserv is unavailable\n";
         }
         else {
             $cmd = $cmd . "systemctl enable $service.service";
@@ -2490,4 +2505,3 @@ sub usage {
     print " genimage -i eth0 -n tg3,bnx2 -o sles11 -p compute --permission 777\n";
     return 0;
 }
-

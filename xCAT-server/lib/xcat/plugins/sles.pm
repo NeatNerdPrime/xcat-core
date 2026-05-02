@@ -37,10 +37,10 @@ sub handled_commands
 {
     return {
         copycd      => "sles",
-        mknetboot   => "nodetype:os=(sle.*)|(suse.*)",
-        mkinstall   => "nodetype:os=(sle.*)|(suse.*)",
-        mkstatelite => "nodetype:os=(sle.*)",
-        mksysclone  => "nodetype:os=(sle.*)|(suse.*)"
+        mknetboot   => "nodetype:os=(sle.*)|(suse.*)|(leap15.*)",
+        mkinstall   => "nodetype:os=(sle.*)|(suse.*)|(leap15.*)",
+        mkstatelite => "nodetype:os=(sle.*)|(leap15.*)",
+        mksysclone  => "nodetype:os=(sle.*)|(suse.*)|(leap15.*)"
     };
 }
 
@@ -297,7 +297,7 @@ sub mknetboot
 
             # TODO: should get the $pkgdir value from the linuximage table
             $pkgdir = "$installroot/$osver/$arch";
-        } elsif ($osver =~ /suse.*/) {
+        } elsif ($osver =~ /suse.*/ or $osver =~ /leap15.*/) {
             $platform = "sles";
         }
 
@@ -875,6 +875,8 @@ sub mkinstall
                 $plat = "sle";
             } elsif ($os =~ /suse.*/) {
                 $plat = "suse";
+            } elsif ($os =~ /leap15.*/) {
+                $plat = "sles";
             } else {
                 $plat = "foobar";
                 print "You should never get here!  Programmer error!";
@@ -1103,6 +1105,9 @@ sub mkinstall
               . " install=$httpmethod://"
               . $netserver . ":" . $httpport
               . "$httpprefix/1";
+            if ($os =~ /^leap15/) {
+                $kcmdline .= " self_update=0";
+            }
 
             my $installnic;
             my $primarynic;
@@ -1566,6 +1571,78 @@ sub using_dracut
     }
 }
 
+sub _opensuse_leap_distname
+{
+    my $version = shift;
+    return unless defined $version;
+    return unless $version =~ /^(15(?:\.\d+)?)/;
+    return "leap$1";
+}
+
+sub _detect_opensuse_leap_treeinfo
+{
+    my $mntpath = shift;
+    my $treeinfo = "$mntpath/.treeinfo";
+    return unless -r $treeinfo;
+
+    my %section;
+    my $section = "";
+    open(my $fh, "<", $treeinfo) or return;
+    while (my $line = <$fh>) {
+        chomp($line);
+        if ($line =~ /^\s*\[([^\]]+)\]\s*$/) {
+            $section = $1;
+            next;
+        }
+        next unless $line =~ /^\s*([^=\s]+)\s*=\s*(.*?)\s*$/;
+        $section{$section}{$1} = $2;
+    }
+    close($fh);
+
+    my $name = $section{release}{name} || $section{general}{family} || $section{general}{name};
+    return unless defined $name and $name =~ /openSUSE\s+Leap/i;
+
+    my $distname = _opensuse_leap_distname($section{release}{version} || $section{general}{version});
+    return unless $distname;
+
+    return ($distname, $section{general}{arch});
+}
+
+sub _detect_opensuse_leap_media
+{
+    my ($media, $products) = @_;
+    $media = "" unless defined $media;
+    $products = "" unless defined $products;
+
+    return unless "$media\n$products" =~ /openSUSE[-\s]+Leap/i;
+
+    my $version;
+    if ($products =~ /openSUSE[-\s]+Leap\s+(\d+(?:\.\d+)?)/i) {
+        $version = $1;
+    } elsif ($media =~ /openSUSE[-\s]+Leap[-\s]+(\d+(?:\.\d+)?)/i) {
+        $version = $1;
+    }
+
+    my $distname = _opensuse_leap_distname($version);
+    return unless $distname;
+
+    my $arch;
+    if ("$media\n$products" =~ /(x86_64|ppc64le|ppc64el|s390x|aarch64)/) {
+        $arch = $1;
+    }
+
+    return ($distname, $arch);
+}
+
+sub _copycd_distname_supported
+{
+    my $distname = shift;
+    return 1 unless $distname;
+    return 1 if $distname =~ /^(?:sle|suse)/;
+    return 1 if $distname =~ /^leap15(?:\..*)?$/;
+    return;
+}
+
 sub copycd
 {
     my $request     = shift;
@@ -1621,10 +1698,10 @@ sub copycd
         $path =~ s,//*,/,g;
     }
 
-    if ($distname and $distname !~ /^sle|^suse/)
+    if (!_copycd_distname_supported($distname))
     {
 
-        #If they say to call it something other than SLES or SUSE, give up?
+        # If they say to call it something other than SLE, SUSE, or Leap, give up.
         return;
     }
 
@@ -1632,7 +1709,16 @@ sub copycd
     my $discnumber;
     my $darch;
     my $linktwo = 0;
-    if (-r $mntpath . "/content")
+
+    my ($opensuse_distname, $opensuse_arch) = _detect_opensuse_leap_treeinfo($mntpath);
+    if ($opensuse_distname) {
+        $detdistname = $opensuse_distname;
+        $distname = $opensuse_distname unless $distname;
+        $darch = $opensuse_arch if $opensuse_arch;
+        $discnumber = 1;
+    }
+
+    if (!$discnumber and -r $mntpath . "/content")
     {
         my $dinfo;
         open($dinfo, $mntpath . "/content");
@@ -1743,16 +1829,30 @@ sub copycd
         }
     
         closedir($dirh);
-    } elsif (-r $mntpath . "/media.1/media") {
+    } elsif (!$discnumber and -r $mntpath . "/media.1/media") {
         my $dinfo;
         open($dinfo, $mntpath . "/media.1/media");
         my $dsc = <$dinfo>;
+        close($dinfo);
+        my $prod = "";
+        if (-r "$mntpath/media.1/products") {
+            open(my $prod_fh, "<", "$mntpath/media.1/products");
+            local $/;
+            $prod = <$prod_fh>;
+            close($prod_fh);
+        }
         if ($dsc =~ /x86_64/) {
             $darch = "x86_64";        
         } elsif ($dsc =~ /ppc64le/) {
             $darch = "ppc64le" ;
         }
-        if ($dsc =~ /Installer/ and $dsc =~ /SLE-15/) {
+        my ($opensuse_media_distname, $opensuse_media_arch) = _detect_opensuse_leap_media($dsc, $prod);
+        if ($opensuse_media_distname) {
+            $discnumber = 1;
+            $detdistname = $opensuse_media_distname;
+            $distname = $opensuse_media_distname unless $distname;
+            $darch = $opensuse_media_arch if $opensuse_media_arch;
+        } elsif ($dsc =~ /Installer/ and $dsc =~ /SLE-15/) {
             $discnumber = 1;
             unless ($distname) {
                 if ($dsc =~ /SLE-15-SP(\d)/) {

@@ -53,6 +53,37 @@ MStatus()
   return $RVAL
 }
 
+SUSESuccess()
+{
+  rc_failed 0
+  rc_status -v
+}
+
+SUSEFailure()
+{
+  rc_failed 1
+  rc_status -v
+}
+
+SUSEWarning()
+{
+  rc_failed 0
+  rc_status -v
+}
+
+IsSUSEFamily()
+{
+  [ -f /etc/SuSE-release ] && return 0
+  [ -r /etc/os-release ] || return 1
+
+  . /etc/os-release
+  case " $ID $ID_LIKE " in
+    *"sles"*|*"sled"*|*"suse"*|*"opensuse"*) return 0 ;;
+  esac
+
+  return 1
+}
+
 if [ -f /etc/init.d/functions ]; then
   # EL8-
   . /etc/init.d/functions
@@ -76,6 +107,18 @@ elif [ -f /lib/lsb/init-functions ]; then
   LOG_SUCCESS=log_success_msg
   LOG_FAILURE=log_failure_msg
   LOG_WARNING=log_warning_msg
+elif IsSUSEFamily && [ -f /etc/rc.status ]; then
+  # Use SUSE's native SysV status helpers when Red Hat/Debian helpers are absent.
+  . /etc/rc.status
+  type rc_reset >/dev/null 2>&1 && type rc_failed >/dev/null 2>&1 && type rc_status >/dev/null 2>&1 || {
+    echo "Error, SUSE status helper functions are unavailable"
+    exit 1
+  }
+  rc_reset
+  STATUS=MStatus
+  LOG_SUCCESS=SUSESuccess
+  LOG_FAILURE=SUSEFailure
+  LOG_WARNING=SUSEWarning
 else
   echo "Error, don't know how to start on this platform"
   exit 1
@@ -158,7 +201,4 @@ start)
   xcatd -p /var/run/xcatd.pid && $LOG_SUCCESS || $LOG_FAILURE
   ;;
 esac
-
-
-
 

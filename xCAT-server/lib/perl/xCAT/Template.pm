@@ -326,7 +326,7 @@ sub subvars {
                         $writerepo .="$repo_in_post\n";
                         $writerepo .="EOF\n";
                     }
-                } elsif ($platform =~ /^(sles|suse)/) {
+                } elsif ($platform =~ /^(sles|suse|leap15)/) {
                     my $http = "http://#TABLE:noderes:\$NODE:nfsserver#$httpportsuffix/$pkgdir";
                     $source .= "         <listentry>
                <media_url>$http</media_url>
@@ -341,18 +341,8 @@ sub subvars {
                         opendir(DIR,$pkgdir);
                         my @subpkgdir=grep(!/\.\.?$|^media.1$/, readdir DIR);
                         foreach my $subdir (@subpkgdir){
-                            my $product_name;
-                            my $product_dir;
-                            $product_dir=$subdir;
-                            if($subdir =~ /^Module-/){
-                                $product_name="sle-".lc($subdir);
-                            }elsif($subdir =~ /^Product-SUSE-Manager-Server|^Product-SLES_SAP|^Product-SLED/){
-                                # Skip product directories that are not "SLES", causes conflict on SLE15.2
-                                next;
-                            }elsif($subdir =~ /^Product-/){
-                                $subdir=~s/Product-//;
-                                $product_name=$subdir;
-                            }
+                            my $product_name = _sle15_install_product_name($subdir);
+                            my $product_dir = $subdir;
                             if (defined($product_name) && defined($product_dir)){
                                 $source .="<listentry>\n$space12<media_url>http://XCATNEXTSERVERHOOK$httpportsuffix$pkgdir</media_url>\n$space12<product>$product_name</product>\n$space12<product_dir>/$product_dir</product_dir>\n$space12</listentry>\n$space10";
                             } 
@@ -2001,6 +1991,29 @@ sub getNM_GW()
     }
 
     return (undef, undef);
+}
+
+sub _sle15_install_product_name {
+    my ($subdir) = @_;
+
+    if ($subdir =~ /^Module-SAP-/) {
+        return;
+    }
+
+    if ($subdir =~ /^Module-/) {
+        return "sle-" . lc($subdir);
+    }
+
+    if ($subdir =~ /^Product-SUSE-Manager-Server|^Product-SLES_SAP|^Product-SLED/) {
+        # Skip product directories that are not generic SLES; these can conflict with SLE 15 installs.
+        return;
+    }
+
+    if ($subdir =~ /^Product-(.+)$/) {
+        return $1;
+    }
+
+    return;
 }
 
 

@@ -42,6 +42,10 @@ echo "DHCLIENT_PRIMARY_DEVICE=yes" >> ifcfg-$PRINIC
 fi
 
 perl -pi -e 's/^FIREWALL="yes"/FIREWALL="no"/' /etc/sysconfig/network/config
+if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files firewalld.service >/dev/null 2>&1; then
+    systemctl stop firewalld.service >/dev/null 2>&1 || true
+    systemctl disable firewalld.service >/dev/null 2>&1 || true
+fi
 service network restart
 
 RAND=$(perl -e 'print int(rand(50)). "\n"')

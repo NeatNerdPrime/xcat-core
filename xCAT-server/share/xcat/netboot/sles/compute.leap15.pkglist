@@ -20,7 +20,7 @@ vim
 rsync
 timezone
 bc
-ntp
+chrony
 gzip
 e2fsprogs
 parted
@@ -37,15 +37,13 @@ multipath-tools
 gpg2
 which
 cifs-utils
-open-lldp
-fcoe-utils
 util-linux-systemd
+systemd
 udev
 kernel-default
-kernel-firmware
+kernel-firmware-all
 adaptec-firmware
 xz
-insserv-compat
-net-tools-deprecated
+net-tools
 rsyslog
 iputils
