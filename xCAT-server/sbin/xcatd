@@ -2091,7 +2091,8 @@ sub plugin_command {
                             chomp(my $eval_err = $@);
                             $error = "$modname: $eval_err";
                         } else {
-                            $error = "$modname: unexpected error (pid $$, $$progname)";
+                            # XS libraries (Sys::Virt, Net::SNMP) can crash without setting $@
+                            $error = "$modname plugin bug (pid $$): died without setting an error. Run xcatd -f to debug";
                         }
                         if (scalar(@nodes)) {
                             $error .= " [nodes: " . join(",", @nodes) . "]";
