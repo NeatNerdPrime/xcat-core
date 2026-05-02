@@ -35,8 +35,13 @@ RHFailure()
     failure
     echo
 }
+
 MStatus()
 {
+  if [ ! -s /var/run/xcatd.pid ]; then
+    echo "xcatd service is not running"
+    return 3
+  fi
   PID=`cat /var/run/xcatd.pid`
   if [ -z "$PID" ]; then
     echo "xcatd service is not running"
@@ -201,4 +206,3 @@ start)
   xcatd -p /var/run/xcatd.pid && $LOG_SUCCESS || $LOG_FAILURE
   ;;
 esac
-

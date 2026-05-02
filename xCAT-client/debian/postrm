@@ -25,7 +25,7 @@ case "$1" in
 
     remove)
        if [ -f "/proc/cmdline" ]; then   # prevent running it during install into chroot image
-             rm /etc/profile.d/xcat.*
+             rm -f /etc/profile.d/xcat.*
        fi
     ;;
 

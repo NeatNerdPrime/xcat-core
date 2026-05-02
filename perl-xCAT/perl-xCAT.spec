@@ -60,9 +60,8 @@ mkdir -p $RPM_BUILD_ROOT/%{prefix}/share/man/man7
 mkdir -p $RPM_BUILD_ROOT/%{prefix}/share/doc/man7
 
 cp -r xCAT/* $RPM_BUILD_ROOT/%{prefix}/lib/perl/xCAT/
-chmod 644 $RPM_BUILD_ROOT/%{prefix}/lib/perl/xCAT/*
-chmod 755 $RPM_BUILD_ROOT/%{prefix}/lib/perl/xCAT/data
-chmod 644 $RPM_BUILD_ROOT/%{prefix}/lib/perl/xCAT/data/*
+find $RPM_BUILD_ROOT/%{prefix}/lib/perl/xCAT -type d -exec chmod 755 {} +
+find $RPM_BUILD_ROOT/%{prefix}/lib/perl/xCAT -type f -exec chmod 644 {} +
 
 
 # For now, don't ship these plugins on AIX, to avoid AIX dependency error.
@@ -153,4 +152,3 @@ exit 0
 
 * Wed Jan 24 2007 Jarrod Johnson <jbjohnso@us.ibm.com>
 -It begins
-

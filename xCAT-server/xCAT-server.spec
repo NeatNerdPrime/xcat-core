@@ -64,7 +64,10 @@ Requires: perl-HTTP-Async >= 0.30-3
 %endif
 %endif
 
+%if 0%{?rhel} && 0%{?rhel} < 7
 Requires: initscripts
+Requires: chkconfig
+%endif
 %if 0%{?rhel} >= 10
 Requires: openssl
 %endif
@@ -483,10 +486,15 @@ ln -sf $RPM_INSTALL_PREFIX0/share/xcat/netboot/sles $RPM_INSTALL_PREFIX0/share/x
 
 ln -sf $RPM_INSTALL_PREFIX0/share/xcat/install/centos $RPM_INSTALL_PREFIX0/share/xcat/install/centos-stream
 ln -sf $RPM_INSTALL_PREFIX0/share/xcat/netboot/centos $RPM_INSTALL_PREFIX0/share/xcat/netboot/centos-stream
+xcat_can_use_systemctl()
+{
+   [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1
+}
+
 if [ "$1" = "1" ]; then #Only if installing for the first time..
-   if [ -x /usr/lib/systemd/systemd ]; then
-       /usr/bin/systemctl daemon-reload
-       /usr/bin/systemctl enable xcatd.service
+   if xcat_can_use_systemctl; then
+       systemctl daemon-reload
+       systemctl enable xcatd.service
    elif [ -x /sbin/chkconfig ]; then
        /sbin/chkconfig --add xcatd
    elif [ -x /usr/lib/lsb/install_initd ]; then
@@ -497,17 +505,16 @@ if [ "$1" = "1" ]; then #Only if installing for the first time..
 fi
 
 if [ "$1" -gt "1" ]; then #only on upgrade...
-  if [ -x /usr/lib/systemd/systemd ]; then
+  if xcat_can_use_systemctl; then
     if [ -f /run/systemd/generator.late/xcatd.service ]; then
         # To cover the case upgrade from no xcatd systemd unit file (cannot enable by default for HA case)
-        ls /etc/rc.d/rc?.d/S??xcatd >/dev/null 2>&1
-        if [ "$?" = "0" ]; then
+        if ls /etc/rc.d/rc?.d/S??xcatd >/dev/null 2>&1; then
            [ -x /sbin/chkconfig ] && /sbin/chkconfig --del xcatd
-           /usr/bin/systemctl daemon-reload
-           /usr/bin/systemctl enable xcatd.service
+           systemctl daemon-reload
+           systemctl enable xcatd.service
         fi
     else
-        /usr/bin/systemctl daemon-reload
+        systemctl daemon-reload
     fi
   fi
   #migration issue for monitoring
@@ -545,13 +552,22 @@ exit 0
 
 %preun
 %ifos linux
+xcat_can_use_systemctl()
+{
+   [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1
+}
+
 if [ $1 == 0 ]; then  #This means only on -e
 	if [ -f "/proc/cmdline" ]; then   # prevent running it during install into chroot image
-  		/etc/init.d/xcatd stop
-  	fi
+      if xcat_can_use_systemctl; then
+          systemctl stop xcatd.service
+      elif [ -x /etc/init.d/xcatd ]; then
+          /etc/init.d/xcatd stop
+      fi
+  fi
 
-  if [ -x /usr/lib/systemd/systemd ]; then
-       /usr/bin/systemctl disable xcatd.service
+  if xcat_can_use_systemctl; then
+       systemctl disable xcatd.service
   elif [ -x /sbin/chkconfig ]; then
       /sbin/chkconfig --del xcatd
   elif [ -x /usr/lib/lsb/remove_initd ]; then
