@@ -2086,14 +2086,15 @@ sub plugin_command {
                         $@ = ""; # sometimes a child 'eval' doesn't clean up $@, if we make it this far, no non-eval bug bombed out
                     };    # REMOVEEVALFORDEBUG
                     if ($sock or $shouldbealivepid != $$) { # We shouldn't still be alive, try to send as much detail to parent as possible as to why
-                        my $error = "$modname plugin bug, pid $$, process description: '$$progname'";
+                        my $error;
                         if ($@) {
-                            $error .= " with error '$@'";
-                        } else { # Sys::Virt and perhaps Net::SNMP sometimes crashes in a way $@ won't catch..
-                            $error .= " with missing eval error, probably due to special manipulation of $@ or strange circumstances in an XS library, remove evals in xcatd marked 'REMOVEEVALFORDEBUG and run xcatd -f for more info";
+                            chomp(my $eval_err = $@);
+                            $error = "$modname: $eval_err";
+                        } else {
+                            $error = "$modname: unexpected error (pid $$, $$progname)";
                         }
-                        if (scalar(@nodes)) { # Don't know which of the nodes, so one error message warning about the possibliity..
-                            $error .= " while trying to fulfill request for the following nodes: " . join(",", @nodes);
+                        if (scalar(@nodes)) {
+                            $error .= " [nodes: " . join(",", @nodes) . "]";
                         }
                         xCAT::MsgUtils->message("S", "xcatd: $error");
                         $callback->({ error => [$error], errorcode => [1] });
