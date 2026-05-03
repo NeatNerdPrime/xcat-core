@@ -895,10 +895,10 @@ sub setnetinfo {
     if ($subcommand eq "thermprofile") {
         return idpxthermprofile($argument);
     }
-    if ($subcommand eq "alert" and $argument eq "on" or $argument =~ /^en/ or $argument =~ /^enable/) {
+    if ($subcommand eq "alert" and ($argument =~ /^(on|en|enable|enabled)$/i)) {
         $netfun = 0x4;
         @cmd = (0x12, 0x9, 0x1, 0x18, 0x11, 0x00);
-    } elsif ($subcommand eq "alert" and $argument eq "off" or $argument =~ /^dis/ or $argument =~ /^disable/) {
+    } elsif ($subcommand eq "alert" and ($argument =~ /^(off|dis|disable|disabled)$/i)) {
         $netfun = 0x4;
         @cmd = (0x12, 0x9, 0x1, 0x10, 0x11, 0x00);
     }
