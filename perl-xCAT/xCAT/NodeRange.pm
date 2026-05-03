@@ -41,8 +41,11 @@ my $glstamp         = 0;
 my $allnodesetstamp = 0;
 my $allgrphashstamp = 0;
 my %allgrphash;
-my $retaincache  = 0;
-my $recurselevel = 0;
+my $retaincache      = 0;
+my $recurselevel     = 0;
+my $nodeset_pid      = 0;
+my $grplist_pid      = 0;
+my $allgrphash_pid   = 0;
 
 my @cachedcolumns;
 
@@ -74,6 +77,9 @@ sub reset_db {
     #workaround, something seems to be trying to use a corrupted reference to grptab
     #this allows init_dbworker to reset the object
     $grptab = 0;
+    $nodeset_pid = 0;
+    $grplist_pid = 0;
+    $allgrphash_pid = 0;
 }
 
 sub nodesbycriteria {
@@ -200,7 +206,8 @@ sub nodesbycriteria {
 sub expandatom {
     my $atom = shift;
     if ($recurselevel > 4096) { die "NodeRange seems to be hung on evaluating $atom, recursion limit hit"; }
-    unless (scalar(@allnodeset) and (($allnodesetstamp + 5) > time())) { #Build a cache of all nodes, some corner cases will perform worse, but by and large it will do better.  We could do tests to see where the breaking points are, and predict how many atoms we have to evaluate to mitigate, for now, implement the strategy that keeps performance from going completely off the rails
+    unless (scalar(@allnodeset) and (($allnodesetstamp + 5) > time()) and $nodeset_pid == $$) { #Build a cache of all nodes, some corner cases will perform worse, but by and large it will do better.  We could do tests to see where the breaking points are, and predict how many atoms we have to evaluate to mitigate, for now, implement the strategy that keeps performance from going completely off the rails
+        $nodeset_pid = $$;
         $allnodesetstamp = time();
         $nodelist->_set_use_cache(1);
         @allnodeset = $nodelist->getAllAttribs('node', 'groups');
@@ -234,7 +241,8 @@ sub expandatom {
         unless ($grptab) {
             $grptab = xCAT::Table->new('nodegroup');
         }
-        if ($grptab and (($glstamp < (time() - 5)) or (not $didgrouplist and not scalar @grplist))) {
+        if ($grptab and (($glstamp < (time() - 5)) or $grplist_pid != $$ or (not $didgrouplist and not scalar @grplist))) {
+            $grplist_pid = $$;
             $didgrouplist = 1;
             $glstamp      = time();
             my $grplist_ptr = $grptab->getAllEntries();
@@ -270,7 +278,8 @@ sub expandatom {
         # The atom is not a dynamic node group, is it a static node group???
         if (!$isdynamicgrp)
         {
-            unless (scalar %allgrphash and (time() < ($allgrphashstamp + 5))) { #build a group membership cache
+            unless (scalar %allgrphash and (time() < ($allgrphashstamp + 5)) and $allgrphash_pid == $$) { #build a group membership cache
+                $allgrphash_pid = $$;
                 $allgrphashstamp = time();
                 %allgrphash      = ();
                 my $nlent;
@@ -488,6 +497,9 @@ sub retain_cache { #A semi private operation to be used *ONLY* in the interestin
     unless ($retaincache) { #take a call to retain_cache(0) to also mean that any existing
                             #cache must be zapped
         if ($nodelist) { $nodelist->_build_cache(1); }
+        $nodeset_pid     = 0;
+        $grplist_pid     = 0;
+        $allgrphash_pid  = 0;
         $glstamp         = 0;
         $allnodesetstamp = 0;
         $allgrphashstamp = 0;
