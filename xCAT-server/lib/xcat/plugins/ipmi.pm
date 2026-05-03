@@ -936,15 +936,25 @@ sub setnetinfo {
             foreach (0 .. 3) {
                 $mask[$_] = $mask[$_] + 0;
             }
+            $sessdata->{setnetinfo_value} = join(".", @mask);
             @cmd = (0x01, $channel_number, 0x6, @mask);
         }
-    } elsif ($subcommand =~ m/gateway/ and $argument) {
+    } elsif ($subcommand eq "gateway" and $argument) {
         my $gw = inet_ntoa(inet_aton($argument));
         my @mask = split /\./, $gw;
         foreach (0 .. 3) {
             $mask[$_] = $mask[$_] + 0;
         }
-        @cmd = (0x01, $channel_number, 12, @mask);
+        $sessdata->{setnetinfo_value} = $gw;
+        @cmd = (0x01, $channel_number, 0x0C, @mask);
+    } elsif ($subcommand eq "backupgateway" and $argument) {
+        my $gw = inet_ntoa(inet_aton($argument));
+        my @mask = split /\./, $gw;
+        foreach (0 .. 3) {
+            $mask[$_] = $mask[$_] + 0;
+        }
+        $sessdata->{setnetinfo_value} = $gw;
+        @cmd = (0x01, $channel_number, 0x0E, @mask);
     } elsif ($subcommand =~ m/vlan/) {
         unless ( int($argument) == $argument ) {
             $callback->({ errorcode => [1], error => ["The input $argument is invalid, please input an integer"] });
@@ -975,6 +985,7 @@ sub setnetinfo {
         foreach (0 .. 3) {
             $mask[$_] = $mask[$_] + 0;
         }
+        $sessdata->{setnetinfo_value} = $mip;
         @cmd = (0x01, $channel_number, 0x3, @mask);
     }
 
@@ -1165,34 +1176,17 @@ sub getnetinfo_response {
         } else {
             xCAT::SvrUtils::sendmsg("BMC VLAN disabled" . $bmcifo, $callback, $sessdata->{node}, %allerrornodes);
         }
-    } elsif ($subcommand eq "ip") {
-        xCAT::SvrUtils::sendmsg(sprintf("$format %d.%d.%d.%d" . $bmcifo,
-                "BMC IP:",
-                $returnd[2],
-                $returnd[3],
-                $returnd[4],
-                $returnd[5]), $callback, $sessdata->{node}, %allerrornodes);
-    } elsif ($subcommand eq "netmask") {
-        xCAT::SvrUtils::sendmsg(sprintf("$format %d.%d.%d.%d" . $bmcifo,
-                "BMC Netmask:",
-                $returnd[2],
-                $returnd[3],
-                $returnd[4],
-                $returnd[5]), $callback, $sessdata->{node}, %allerrornodes);
-    } elsif ($subcommand eq "gateway") {
-        xCAT::SvrUtils::sendmsg(sprintf("$format %d.%d.%d.%d" . $bmcifo,
-                "BMC Gateway:",
-                $returnd[2],
-                $returnd[3],
-                $returnd[4],
-                $returnd[5]), $callback, $sessdata->{node}, %allerrornodes);
-    } elsif ($subcommand eq "backupgateway") {
-        xCAT::SvrUtils::sendmsg(sprintf("$format %d.%d.%d.%d" . $bmcifo,
-                "BMC Backup Gateway:",
-                $returnd[2],
-                $returnd[3],
-                $returnd[4],
-                $returnd[5]), $callback, $sessdata->{node}, %allerrornodes);
+    } elsif ($subcommand =~ /^(ip|netmask|gateway|backupgateway)$/) {
+        my %labels = (ip => "BMC IP:", netmask => "BMC Netmask:", gateway => "BMC Gateway:", backupgateway => "BMC Backup Gateway:");
+        my $current = sprintf("%d.%d.%d.%d", $returnd[2], $returnd[3], $returnd[4], $returnd[5]);
+        my $requested = delete $sessdata->{setnetinfo_value};
+        if (defined($requested) and $requested ne $current) {
+            xCAT::SvrUtils::sendmsg(sprintf("$format %s (requested %s, not yet reflected)" . $bmcifo,
+                    $labels{$subcommand}, $current, $requested), $callback, $sessdata->{node}, %allerrornodes);
+        } else {
+            xCAT::SvrUtils::sendmsg(sprintf("$format %s" . $bmcifo,
+                    $labels{$subcommand}, $current), $callback, $sessdata->{node}, %allerrornodes);
+        }
     } elsif ($subcommand eq "community") {
         my $text = sprintf("$format ", "SP SNMP Community:");
         my $l = 2;
