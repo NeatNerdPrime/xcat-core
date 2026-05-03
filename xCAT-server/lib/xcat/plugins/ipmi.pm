@@ -946,18 +946,22 @@ sub setnetinfo {
         }
         @cmd = (0x01, $channel_number, 12, @mask);
     } elsif ($subcommand =~ m/vlan/) {
-        unless ( int($argument) == $argument ) {
-            $callback->({ errorcode => [1], error => ["The input $argument is invalid, please input an integer"] });
-            return;
+        if ($argument =~ /^(off|disable|disabled)$/i) {
+            @cmd = (0x01, $channel_number, 0x14, 0x00, 0x00);
+        } else {
+            unless ( $argument =~ /^\d+$/ ) {
+                $callback->({ errorcode => [1], error => ["The input $argument is invalid, please input an integer or 'off'"] });
+                return;
+            }
+            unless (($argument>=1) && ($argument<=4094)) {
+                $callback->({ errorcode => [1], error => ["The input $argument is invalid, valid value [1-4094] or 'off'"] });
+                return;
+            }
+            my @vlanparam = ();
+            $vlanparam[0] = ($argument & 0xff);
+            $vlanparam[1] = 0x80 | (($argument & 0xf00) >> 8);
+            @cmd = (0x01, $channel_number, 0x14, @vlanparam);
         }
-        unless (($argument>=1) && ($argument<=4096)) {
-            $callback->({ errorcode => [1], error => ["The input $argument is invalid, valid value [1-4096]"] });
-            return;
-        }
-        my @vlanparam = ();
-        $vlanparam[0] = ($argument & 0xff);
-        $vlanparam[1] = 0x80 | (($argument & 0xf00) >> 8);
-        @cmd = (0x01, $channel_number, 0x14, @vlanparam);
     } elsif ($subcommand =~ m/ip/ and $argument =~ m/dhcp/) {
         @cmd = (0x01, $channel_number, 0x4, 0x2);
     } elsif ($subcommand =~ m/ip/) {

@@ -450,7 +450,7 @@ OPTIONS
 
 \ **vlan**\ 
  
- Get or set vlan ID. For get vlan ID, if vlan is not enabled, 'BMC VLAN disabled' will be displayed. For set vlan ID, the valid value are [1-4096].
+ Get or set VLAN ID. Valid VLAN IDs are 1-4094. On IPMI managed nodes, use \ **vlan=off**\  or \ **vlan=disable**\  to disable VLAN tagging.
  
 
 
