@@ -1714,17 +1714,6 @@ sub genCredentials
             }
         }
     }
-    if ((!-d "/etc/xcatdockerca/cert") || $::FORCE || $::genCredentials) {
-        my $cmd = "echo 'y\ny\ny\ny' |$::XCATROOT/share/xcat/scripts/setup-dockerhost-cert.sh";
-        verbose("Running $cmd");
-        my $rc = system($cmd);
-        if ($rc >> 8) {
-            xCAT::MsgUtils->message('E',
-"Could not create xCAT dockerhost certificate in /etc/xcatdockerca/cert.");
-        } else {
-            verbose("Create xCAT dockerhost certificate in /etc/xcatdockerca/cert directory.");
-        }
-    }
 
     #  copy to postscript directory, no longer use cert directory
     $cmd = "/bin/rm -rf $::INSTALLDIR/postscripts/cert >/dev/null 2>&1";

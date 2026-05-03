@@ -335,15 +335,6 @@ sub process_request
             unlink "/tmp/xcat/client.cert.$$";
             my $certcontents = join('', @certdata);
             push @{ $rsp->{'data'} }, { content => [$certcontents], desc => [$parm] };
-        } elsif ($parm =~ /xcat_dockerhost_cert/) {
-            xCAT::MsgUtils->trace(0, 'I', "credentials: sending $parm to $client");
-            unless (-r "/etc/xcatdockerca/cert/dockerhost-cert.pem") {
-                push @{ $rsp->{'error'} }, "Unable to read /etc/xcatdockerca/cert/dockerhost-cert.pem ";
-                xCAT::MsgUtils->trace(0, 'E', "credentials: Unable to read /etc/xcatdockerca/cert/dockerhost-cert.pem");
-                next;
-            }
-            $tfilename = "/etc/xcatdockerca/cert/dockerhost-cert.pem";
-
         } elsif ($parm =~ /xcat_secure_pw:/) {
             xCAT::MsgUtils->trace(0, 'I', "credentials: sending $parm to $client");
             my @users=split(/:/,$parm);

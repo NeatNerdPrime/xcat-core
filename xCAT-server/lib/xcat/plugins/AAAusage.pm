@@ -27,9 +27,6 @@ sub handled_commands {
         lsvm      => 'AAAusage',
         chvm      => 'AAAusage',
         rmvm      => 'AAAusage',
-        mkdocker  => 'AAAusage',
-        lsdocker  => 'AAAusage',
-        rmdocker  => 'AAAusage',
 
         #lsslp     => 'AAAusage',
         rflash   => 'AAAusage',

@@ -66,8 +66,6 @@ my %usage = (
        rpower noderange [on|off|reset|stat|softoff]
     MIC specific:
        rpower noderange [stat|state|on|off|reset|boot]
-    docker specific:
-       rpower noderange [start|stop|restart|pause|unpause|state]
     pdu specific:
        rpower noderange [off|on|stat|status|reset]
        rpower noderange [pduoff|pduon|pdustat|pdustatus|pdureset]
@@ -380,13 +378,6 @@ my %usage = (
        rmvm [-p] [-f]
        PPC (using Direct FSP Management) specific:
        rmvm <noderange>",
-    "mkdocker" =>
-"Usage: mkdocker <noderange> [image=<image_name> [command=<command>]] [dockerflag=<docker_flags>]",
-    "lsdocker" =>
-      "Usage: lsdocker <noderange>
-       lsdocker <noderange> [-l|--logs]",
-    "rmdocker" =>
-      "Usage: rmdocker <noderage>",
     "lsslp" =>
       "Usage: lsslp [-h|--help|-v|--version]
        lsslp [<noderange>][-V|--verbose][-i ip[,ip..]][-w][-r|-x|-z][-n][-I][-s FRAME|CEC|MM|IVM|RSA|HMC|CMM|IMM2|FSP]

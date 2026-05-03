@@ -738,7 +738,6 @@ sub do_test {
     my $diskless_installation_hierarchy_testcase             = "";
     my $statelite_installation_hierarchy_by_ramdisk_testcase = "";
     my $statelite_installation_hierarchy_by_nfs_testcase     = "";
-    my $setup_dockerhost_testcase                            = "";
     my $batbundle                                            = "";
 
     if ((($mn =~ /sles/) || ($mn =~ /rh/)) && ($mn !~ /E/)) {
@@ -757,7 +756,6 @@ sub do_test {
     } elsif ($mn =~ /ubuntux/) {
         $diskfull_installation_flat_testcase = "Ubuntu_full_installation_flat_x86_vm";
         $diskless_installation_flat_testcase = "Ubuntu_diskless_installation_flat_x86_vm";
-        $setup_dockerhost_testcase = "Full_installation_flat_docker";
         $batbundle                 = "x_ubuntu_cmd.bundle";
     } elsif ($mn =~ /E/) {
         $diskfull_installation_flat_testcase = "Full_installation_flat_p8_le";
@@ -898,15 +896,6 @@ sub do_test {
             $rc = system("ssh -t $confkeys{$mn} 'exec bash -l -i -c \"xcattest -f /opt/xcat/share/xcat/tools/autotest/default.conf  -t $diskfull_installation_flat_testcase\"' >/dev/null 2>&1");
             send_msg(2, "[$mn->$confkeys{$mn}][do_test] do diskfull installation test in flat mode in $mn.....[done]");
             last if ($rc != 0);
-
-            if ($mn =~ /ubuntux/) {
-
-                #set up dockerhosts
-                send_msg(2, "[$mn->$confkeys{$mn}][do_test] setupdockerhost $mn.....");
-                $rc = system("ssh -t $confkeys{$mn} 'exec bash -l -i -c \"xcattest -f /opt/xcat/share/xcat/tools/autotest/default.conf  -t $setup_dockerhost_testcase\"' >/dev/null 2>&1");
-                send_msg(2, "[$mn->$confkeys{$mn}][do_test] setup dockerhosts $mn.....[done]");
-                last if ($rc != 0);
-            }
 
             #commands bundle in flat mode test
             send_msg(2, "[$mn->$confkeys{$mn}][do_test] doing all commands test in flat mode in $mn.....");
