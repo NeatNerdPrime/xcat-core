@@ -503,7 +503,29 @@ sub get_os_search_list {
     }
     push(@list, join('.', @word));
 
+    # openSUSE Leap 15.x uses the same AutoYaST asset layout as SLES 15.
+    # Do not extend this to Leap 16 without validating its installer path.
+    if ($baseos =~ /^(leap15)(?:\..*)?$/) {
+        push(@list, "sle15");
+    }
+
     return @list;
+}
+
+sub _profile_file_matches {
+    my ($filename, $osver, $shortosver, $genos, $arch) = @_;
+
+    # osver and arch specific, for example compute.sle15.x86_64.pkglist
+    if ($filename =~ /[^\.]*\.([^\.]*)\.([^\.]*)\./) {
+        return (($1 eq $osver || $1 eq $shortosver || $1 eq $genos) && $2 eq $arch);
+    }
+
+    # osver or arch specific, for example compute.sle15.pkglist
+    if ($filename =~ /[^\.]*\.([^\.]*)\./) {
+        return ($1 eq $osver || $1 eq $shortosver || $1 eq $genos || $1 eq $arch);
+    }
+
+    return 1;
 }
 
 sub get_file_name {
@@ -581,6 +603,7 @@ sub get_postinstall_file_name {
     my $profile   = shift;
     my $os        = shift;
     my $arch      = shift;
+    my $genos     = shift;
     my $extension = "postinstall";
     my $dotpos    = rindex($os, ".");
     my $osbase    = substr($os, 0, $dotpos);
@@ -637,6 +660,13 @@ sub get_postinstall_file_name {
         }
     }
 
+    if (($genos) && (-x "$searchpath/$profile.$genos.$arch.$extension")) {
+        return "$searchpath/$profile.$genos.$arch.$extension";
+    }
+    if (($genos) && (-x "$searchpath/$profile.$genos.$extension")) {
+        return "$searchpath/$profile.$genos.$extension";
+    }
+
     if (-x "$searchpath/$profile.$arch.$extension") {
         return "$searchpath/$profile.$arch.$extension";
     }
@@ -689,7 +719,7 @@ sub update_tables_with_templates
         $osver = shift;
     }
     my $shortosver = $osver;
-    $shortosver =~ s/\..*//;
+    $shortosver =~ s/\..*//; # for major-version assets, for example leap15.6 -> leap15
     my $arch         = shift;    #like ppc64, x86, x86_64
     my $ospkgdir     = shift;
     my $osdistroname = shift;
@@ -707,6 +737,8 @@ sub update_tables_with_templates
         $osname    = "hyperv";
         $ostype    = "Windows";
         $imagetype = "windows";
+    } elsif ($osver =~ /^leap15/) {
+        $osname = "sles";
     } else {
         until (-r "$::XCATROOT/share/xcat/install/$osname/" or not $osname) {
             chop($osname);
@@ -729,7 +761,11 @@ sub update_tables_with_templates
                 $genos = "subiquity";
             }
         }
+    } elsif ($osver =~ /^leap15/) {
+        $genos = "sle15";
     }
+    # For Leap, let get_os_search_list prefer leap15 assets before the sle15 fallback.
+    my $file_lookup_genos = ($osver =~ /^leap15/) ? undef : $genos;
 
     #print "osver=$osver, arch=$arch, osname=$osname, genos=$genos\n";
     my $installroot = xCAT::TableUtils->getInstallDir();
@@ -755,12 +791,10 @@ sub update_tables_with_templates
     foreach (@tmplfiles) {
         my $tmpf = basename($_);
 
+        #skip template files for other OS or architecture suffixes
+        next unless _profile_file_matches($tmpf, $osver, $shortosver, $genos, $arch);
+
         #get the profile name out of the file, TODO: this does not work if the profile name contains the '.'
-        if ($tmpf =~ /[^\.]*\.([^\.]*)\.([^\.]*)\./) { # osver *and* arch specific, make sure they match
-            unless (($1 eq $osver or $1 eq $shortosver) and $2 eq $arch) { next; }
-        } elsif ($tmpf =~ /[^\.]*\.([^\.]*)\./) { #osver *or* arch specific, make sure one matches
-            unless ($1 eq $osver or $1 eq $shortosver or $2 eq $arch) { next; }
-        }
         $tmpf =~ /^([^\.]*)\..*$/;
         $tmpf = $1;
 
@@ -771,12 +805,10 @@ sub update_tables_with_templates
     foreach (@tmplfiles) {
         my $tmpf = basename($_);
 
+        #skip template files for other OS or architecture suffixes
+        next unless _profile_file_matches($tmpf, $osver, $shortosver, $genos, $arch);
+
         #get the profile name out of the file, TODO: this does not work if the profile name contains the '.'
-        if ($tmpf =~ /[^\.]*\.([^\.]*)\.([^\.]*)\./) { # osver *and* arch specific, make sure they match
-            unless (($1 eq $osver or $1 eq $shortosver) and $2 eq $arch) { next; }
-        } elsif ($tmpf =~ /[^\.]*\.([^\.]*)\./) { #osver *or* arch specific, make sure one matches
-            unless ($1 eq $osver or $1 eq $shortosver or $1 eq $arch) { next; }
-        }
         $tmpf =~ /^([^\.]*)\..*$/;
         $tmpf = $1;
         $profiles{$tmpf} = 1;
@@ -797,20 +829,20 @@ sub update_tables_with_templates
 
         #print "profile=$profile\n";
         #get template file
-        my $tmplfile = get_tmpl_file_name($cuspath, $profile, $osver, $arch, $genos);
-        if (!$tmplfile) { $tmplfile = get_tmpl_file_name($defpath, $profile, $osver, $arch, $genos); }
+        my $tmplfile = get_tmpl_file_name($cuspath, $profile, $osver, $arch, $file_lookup_genos);
+        if (!$tmplfile) { $tmplfile = get_tmpl_file_name($defpath, $profile, $osver, $arch, $file_lookup_genos); }
         if (!$tmplfile) { next; }
 
         #get otherpkgs.pkglist file
-        my $otherpkgsfile = get_otherpkgs_pkglist_file_name($cuspath, $profile, $osver, $arch);
-        if (!$otherpkgsfile) { $otherpkgsfile = get_otherpkgs_pkglist_file_name($defpath, $profile, $osver, $arch); }
+        my $otherpkgsfile = get_otherpkgs_pkglist_file_name($cuspath, $profile, $osver, $arch, $file_lookup_genos);
+        if (!$otherpkgsfile) { $otherpkgsfile = get_otherpkgs_pkglist_file_name($defpath, $profile, $osver, $arch, $file_lookup_genos); }
 
         #get synclist file
         my $synclistfile = xCAT::SvrUtils->getsynclistfile(undef, $osver, $arch, $profile, "netboot");
 
         #get the pkglist file
-        my $pkglistfile = get_pkglist_file_name($cuspath, $profile, $osver, $arch);
-        if (!$pkglistfile) { $pkglistfile = get_pkglist_file_name($defpath, $profile, $osver, $arch, $genos); }
+        my $pkglistfile = get_pkglist_file_name($cuspath, $profile, $osver, $arch, $file_lookup_genos);
+        if (!$pkglistfile) { $pkglistfile = get_pkglist_file_name($defpath, $profile, $osver, $arch, $file_lookup_genos); }
 
         #now update the db
         if (!$osimagetab) {
@@ -928,6 +960,8 @@ sub update_tables_with_mgt_image
         $osname    = "hyperv";
         $ostype    = "Windows";
         $imagetype = "windows";
+    } elsif ($osver =~ /^leap15/) {
+        $osname = "sles";
     } else {
         until (-r "$::XCATROOT/share/xcat/install/$osname/" or not $osname) {
             chop($osname);
@@ -1131,6 +1165,8 @@ sub update_tables_with_diskless_image
     my $mode         = shift;
     my $ospkgdir     = shift;
     my $osdistroname = shift;
+    my $shortosver   = $osver;
+    $shortosver =~ s/\..*//; # for major-version assets, for example leap15.6 -> leap15
 
     my $provm = "netboot";
     if ($mode) { $provm = $mode; }
@@ -1142,6 +1178,8 @@ sub update_tables_with_diskless_image
         $osname    = "windows";
         $ostype    = "Windows";
         $imagetype = "windows";
+    } elsif ($osver =~ /^leap15/) {
+        $osname = "sles";
     } else {
         until (-r "$::XCATROOT/share/xcat/netboot/$osname/" or not $osname) {
             chop($osname);
@@ -1156,7 +1194,11 @@ sub update_tables_with_diskless_image
     $genos =~ s/\..*//;
     if ($genos =~ /rh.*s(\d*)/) {
         $genos = "rhels$1";
+    } elsif ($osver =~ /^leap15/) {
+        $genos = "sle15";
     }
+    # For Leap, let get_os_search_list prefer leap15 assets before the sle15 fallback.
+    my $file_lookup_genos = ($osver =~ /^leap15/) ? undef : $genos;
 
     #print "osver=$osver, arch=$arch, osname=$osname, genos=$genos, profile=$profile\n";
     my $installroot = xCAT::TableUtils->getInstallDir();
@@ -1186,6 +1228,9 @@ sub update_tables_with_diskless_image
         foreach (@tmplfiles) {
             my $tmpf = basename($_);
 
+            #skip pkglist files for other OS or architecture suffixes
+            next unless _profile_file_matches($tmpf, $osver, $shortosver, $genos, $arch);
+
             #get the profile name out of the file, TODO: this does not work if the profile name contains the '.'
             $tmpf =~ /^([^\.]*)\..*$/;
             $tmpf = $1;
@@ -1194,6 +1239,9 @@ sub update_tables_with_diskless_image
         @tmplfiles = glob($defpath . "/compute.*pkglist");
         foreach (@tmplfiles) {
             my $tmpf = basename($_);
+
+            #skip pkglist files for other OS or architecture suffixes
+            next unless _profile_file_matches($tmpf, $osver, $shortosver, $genos, $arch);
 
             #get the profile name out of the file, TODO: this does not work if the profile name contains the '.'
             $tmpf =~ /^([^\.]*)\..*$/;
@@ -1204,26 +1252,26 @@ sub update_tables_with_diskless_image
     foreach my $profile (keys %profiles) {
 
         #get the pkglist file
-        my $pkglistfile = get_pkglist_file_name($cuspath, $profile, $osver, $arch);
-        if (!$pkglistfile) { $pkglistfile = get_pkglist_file_name($defpath, $profile, $osver, $arch); }
+        my $pkglistfile = get_pkglist_file_name($cuspath, $profile, $osver, $arch, $file_lookup_genos);
+        if (!$pkglistfile) { $pkglistfile = get_pkglist_file_name($defpath, $profile, $osver, $arch, $file_lookup_genos); }
 
         #print "pkglistfile=$pkglistfile\n";
         if (!$pkglistfile) { next; }
 
         #get otherpkgs.pkglist file
-        my $otherpkgsfile = get_otherpkgs_pkglist_file_name($cuspath, $profile, $osver, $arch);
-        if (!$otherpkgsfile) { $otherpkgsfile = get_otherpkgs_pkglist_file_name($defpath, $profile, $osver, $arch); }
+        my $otherpkgsfile = get_otherpkgs_pkglist_file_name($cuspath, $profile, $osver, $arch, $file_lookup_genos);
+        if (!$otherpkgsfile) { $otherpkgsfile = get_otherpkgs_pkglist_file_name($defpath, $profile, $osver, $arch, $file_lookup_genos); }
 
         #get synclist file
         my $synclistfile = xCAT::SvrUtils->getsynclistfile(undef, $osver, $arch, $profile, "netboot");
 
         #get the exlist file
-        my $exlistfile = get_exlist_file_name($cuspath, $profile, $osver, $arch);
-        if (!$exlistfile) { $exlistfile = get_exlist_file_name($defpath, $profile, $osver, $arch); }
+        my $exlistfile = get_exlist_file_name($cuspath, $profile, $osver, $arch, $file_lookup_genos);
+        if (!$exlistfile) { $exlistfile = get_exlist_file_name($defpath, $profile, $osver, $arch, $file_lookup_genos); }
 
         #get postinstall script file name
-        my $postfile = get_postinstall_file_name($cuspath, $profile, $osver, $arch);
-        if (!$postfile) { $postfile = get_postinstall_file_name($defpath, $profile, $osver, $arch); }
+        my $postfile = get_postinstall_file_name($cuspath, $profile, $osver, $arch, $genos);
+        if (!$postfile) { $postfile = get_postinstall_file_name($defpath, $profile, $osver, $arch, $genos); }
 
 
         #now update the db

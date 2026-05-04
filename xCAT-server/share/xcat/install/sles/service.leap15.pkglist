@@ -1,0 +1,15 @@
+@base
+@x11
+openssl
+iputils
+chrony
+rsync
+rsyslog
+net-tools
+vsftpd
+perl-IO-Tty
+perl-SNMP
+perl-Net-DNS
+mariadb-client
+vim
+wget

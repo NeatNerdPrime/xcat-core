@@ -1641,11 +1641,8 @@ sub process_request
     }
     else
     {
-        my @nsrnoutput = split /\n/, `/bin/netstat -rn`;
-        splice @nsrnoutput, 0, 2;
-        foreach (@nsrnoutput) {    #scan netstat
-            my @parts = split /\s+/;
-            push @nrn, $parts[0] . ":" . $parts[7] . ":" . $parts[2] . ":" . $parts[3];
+        foreach my $route (local_ipv4_routes()) {
+            push @nrn, join(':', @{$route});
         }
         my @ip6routes = `ip -6 route`;
         foreach (@ip6routes) {
@@ -1734,10 +1731,7 @@ sub process_request
 
                 # For SLES11+ and RHEL7+ Operating system releases, the
                 # dhcpd/dhcpd6 configuration is stored in the same file
-                my $os_ver = $os;
-                $os_ver =~ s/[^0-9.^0-9]//g;
-                if (($os =~ /sles/i && $os_ver >= 11) ||
-                    ($os =~ /rhels?/i && $os_ver >= 7)) {
+                if (dhcpd_sysconfig_uses_interface_key($os)) {
 
                     $dhcpd_key = "DHCPD_INTERFACE";
                     if ($usingipv6 and $dhcpver eq "dhcpd6") {
@@ -1805,10 +1799,7 @@ sub process_request
         if ($usingipv6) {
 
             # sles11.3 and rhels7 has dhcpd and dhcpd6 config in the dhcp file
-            my $os_ver = $os;
-            $os_ver =~ s/[^0-9.^0-9]//g;
-            if (($os =~ /sles/i && $os_ver >= 11) ||
-                ($os =~ /rhels?/i && $os_ver >= 7)) {
+            if (dhcpd_sysconfig_uses_interface_key($os)) {
                 if ($missingfiles{dhcpd}) {
                     $callback->({ error => ["The file /etc/sysconfig/dhcpd doesn't exist, check the dhcp server"] });
                 }
@@ -2612,6 +2603,17 @@ sub kea_apply_ddns_behavior
     $intent->{'ddns-update-on-renew'} = JSON::true;
 }
 
+sub dhcpd_sysconfig_uses_interface_key
+{
+    my $os = shift || "";
+    my $os_ver = $os;
+    $os_ver =~ s/[^0-9.^0-9]//g;
+
+    return 1 if $os =~ /(sles|opensuse[-_]?leap|leap)/i && $os_ver >= 11;
+    return 1 if $os =~ /rhels?/i && $os_ver >= 7;
+    return 0;
+}
+
 sub kea_ddns_enabled
 {
     return defined($::XCATSITEVALS{dnshandler}) && $::XCATSITEVALS{dnshandler} =~ /ddns/ ? 1 : 0;
@@ -2643,6 +2645,24 @@ sub kea_ipv4_routes
     my @vnets = @_;
     my @routes;
 
+    push @routes, local_ipv4_routes();
+
+    foreach (@vnets) {
+        my $n  = $_->{net};
+        my $if = $_->{mgtifname};
+        my $nm = $_->{mask};
+        if ($if =~ /!remote!/ and $n !~ /:/) {
+            push @routes, [ $n, $if, $nm, '' ];
+        }
+    }
+
+    return @routes;
+}
+
+sub local_ipv4_routes
+{
+    my @routes;
+
     my $ipcmd = kea_command_path('ip');
     if ($ipcmd) {
         my @route_output = split /\n/, `$ipcmd -4 route show 2>/dev/null`;
@@ -2664,15 +2684,6 @@ sub kea_ipv4_routes
                 next unless $parts[0] && $parts[2] && $parts[7];
                 push @routes, [ $parts[0], $parts[7], $parts[2], $parts[3] ];
             }
-        }
-    }
-
-    foreach (@vnets) {
-        my $n  = $_->{net};
-        my $if = $_->{mgtifname};
-        my $nm = $_->{mask};
-        if ($if =~ /!remote!/ and $n !~ /:/) {
-            push @routes, [ $n, $if, $nm, '' ];
         }
     }
 

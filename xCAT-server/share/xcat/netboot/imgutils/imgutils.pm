@@ -50,16 +50,24 @@ sub get_profile_def_filename {
     }
 
     my $osbase = substr($osver, 0, $dotpos);
+    my $fallbackos;
+    if ($osver =~ /^leap15/) {
+        $fallbackos = "sle15";
+    }
     if (-r "$base/$profile.$osver.$arch.$ext") {
         return "$base/$profile.$osver.$arch.$ext";
     } elsif (-r "$base/$profile.$osbase.$arch.$ext") {
         return "$base/$profile.$osbase.$arch.$ext";
+    } elsif ($fallbackos && -r "$base/$profile.$fallbackos.$arch.$ext") {
+        return "$base/$profile.$fallbackos.$arch.$ext";
     } elsif (-r "$base/$profile.$arch.$ext") {
         return "$base/$profile.$arch.$ext";
     } elsif (-r "$base/$profile.$osver.$ext") {
         return "$base/$profile.$osver.$ext";
     } elsif (-r "$base/$profile.$osbase.$ext") {
         return "$base/$profile.$osbase.$ext";
+    } elsif ($fallbackos && -r "$base/$profile.$fallbackos.$ext") {
+        return "$base/$profile.$fallbackos.$ext";
     } elsif (-r "$base/$profile.$ext") {
         return "$base/$profile.$ext";
     }

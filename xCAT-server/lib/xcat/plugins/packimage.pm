@@ -217,8 +217,12 @@ sub process_request {
     }
 
     my $distname = $osver;
-    until (-r "$::XCATROOT/share/xcat/netboot/$distname/" or not $distname) {
-        chop($distname);
+    if ($osver =~ /^leap15/) {
+        $distname = "sles";
+    } else {
+        until (-r "$::XCATROOT/share/xcat/netboot/$distname/" or not $distname) {
+            chop($distname);
+        }
     }
     unless ($distname) {
         $callback->({ error => ["Unable to find $::XCATROOT/share/xcat/netboot directory for $osver"], errorcode => [1] });
@@ -326,7 +330,11 @@ sub process_request {
     if (-e "$rootimg_dir/usr/lib/dracut/modules.d/97xcat/install") {
         xCAT::Utils->runcmd("mv $rootimg_dir/usr/lib/dracut/modules.d/97xcat/install $rootimg_dir/.statebackup/install", 0, 1);
     }
-    xCAT::Utils->runcmd("cp /opt/xcat/share/xcat/netboot/rh/dracut_033/install.netboot $rootimg_dir/usr/lib/dracut/modules.d/97xcat/install", 0, 1);
+    my $dracut_install = "$::XCATROOT/share/xcat/netboot/$distname/dracut_033/install.netboot";
+    if (!-r $dracut_install) {
+        $dracut_install = "$::XCATROOT/share/xcat/netboot/rh/dracut_033/install.netboot";
+    }
+    xCAT::Utils->runcmd("cp $dracut_install $rootimg_dir/usr/lib/dracut/modules.d/97xcat/install", 0, 1);
 
 
     # timedatectl requires /etc/localtime link to the zoneinfo in /usr/share/zoneinfo

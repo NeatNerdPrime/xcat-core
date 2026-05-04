@@ -1,10 +1,12 @@
 use strict;
 use warnings;
+## no critic (Modules::RequireFilenameMatchesPackage, TestingAndDebugging::ProhibitNoStrict, TestingAndDebugging::ProhibitNoWarnings)
 no warnings 'once';
 
 use FindBin;
 use lib "$FindBin::Bin/../../perl-xCAT";
 
+use File::Temp qw(tempdir);
 use Test::More;
 
 BEGIN {
@@ -80,6 +82,72 @@ my %network_entry = (
     domain       => 'cluster.test',
     tftpserver   => '<xcatmaster>',
 );
+
+ok(xCAT_plugin::dhcp::dhcpd_sysconfig_uses_interface_key('opensuse-leap15.6'), 'openSUSE Leap head node uses SUSE dhcpd interface key');
+ok(xCAT_plugin::dhcp::dhcpd_sysconfig_uses_interface_key('leap15.6'), 'Leap head node osver uses SUSE dhcpd interface key');
+ok(!xCAT_plugin::dhcp::dhcpd_sysconfig_uses_interface_key('opensuse-tumbleweed'), 'generic openSUSE names do not enable Leap-specific dhcpd handling');
+
+{
+    my $tmpdir = tempdir(CLEANUP => 1);
+    my $fake_ip = "$tmpdir/ip";
+    open(my $ip_fh, '>', $fake_ip) or die "Cannot write fake ip command: $!";
+    print {$ip_fh} "#!/bin/sh\n";
+    print {$ip_fh} "cat <<'EOF'\n";
+    print {$ip_fh} "default via 192.168.1.1 dev eth1 proto dhcp\n";
+    print {$ip_fh} "10.0.0.0/24 dev eth0 proto kernel scope link src 10.0.0.1\n";
+    print {$ip_fh} "192.168.1.0/24 dev eth1 proto kernel scope link src 192.168.1.20\n";
+    print {$ip_fh} "EOF\n";
+    close($ip_fh);
+    chmod 0755, $fake_ip;
+
+    no warnings 'redefine';
+    local *xCAT_plugin::dhcp::kea_command_path = sub {
+        my ($command) = @_;
+        return $fake_ip if $command eq 'ip';
+        return;
+    };
+
+    is_deeply(
+        [ xCAT_plugin::dhcp::local_ipv4_routes() ],
+        [
+            [ '0.0.0.0',     'eth1', '0.0.0.0',       'G' ],
+            [ '10.0.0.0',    'eth0', '255.255.255.0', '' ],
+            [ '192.168.1.0', 'eth1', '255.255.255.0', '' ],
+        ],
+        'local IPv4 route detection prefers ip route output'
+    );
+}
+
+{
+    my $tmpdir = tempdir(CLEANUP => 1);
+    my $fake_netstat = "$tmpdir/netstat";
+    open(my $netstat_fh, '>', $fake_netstat) or die "Cannot write fake netstat command: $!";
+    print {$netstat_fh} "#!/bin/sh\n";
+    print {$netstat_fh} "cat <<'EOF'\n";
+    print {$netstat_fh} "Kernel IP routing table\n";
+    print {$netstat_fh} "Destination     Gateway         Genmask         Flags   MSS Window  irtt Iface\n";
+    print {$netstat_fh} "0.0.0.0         192.168.1.1     0.0.0.0         UG        0 0          0 eth1\n";
+    print {$netstat_fh} "10.0.0.0        0.0.0.0         255.255.255.0   U         0 0          0 eth0\n";
+    print {$netstat_fh} "EOF\n";
+    close($netstat_fh);
+    chmod 0755, $fake_netstat;
+
+    no warnings 'redefine';
+    local *xCAT_plugin::dhcp::kea_command_path = sub {
+        my ($command) = @_;
+        return $fake_netstat if $command eq 'netstat';
+        return;
+    };
+
+    is_deeply(
+        [ xCAT_plugin::dhcp::local_ipv4_routes() ],
+        [
+            [ '0.0.0.0',  'eth1', '0.0.0.0',       'UG' ],
+            [ '10.0.0.0', 'eth0', '255.255.255.0', 'U' ],
+        ],
+        'local IPv4 route detection falls back to netstat output'
+    );
+}
 
 {
     no warnings 'redefine';
