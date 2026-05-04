@@ -514,7 +514,7 @@ sub mknetboot
             $kcmdline =
               "imgurl=$httpmethod://$imgsrv:$httpport/$rootimgdir/$compressedrootimg ";
         }
-        $kcmdline .= "XCAT=$xcatmaster:$xcatdport quiet ";
+        $kcmdline .= "XCAT=$xcatmaster:$xcatdport ";
         $kcmdline .= " XCATHTTPPORT=$httpport ";
 
         #if site.nodestatus="n", append "nonodestatus" to kcmdline
@@ -1098,7 +1098,7 @@ sub mkinstall
                 $httpprefix =~ s/^$installroot/\/install/;
             }
             my $kcmdline =
-              "quiet autoyast=$httpmethod://"
+              "autoyast=$httpmethod://"
               . $netserver . ":" . $httpport
               . "/install/autoinst/"
               . $node

@@ -909,6 +909,11 @@ sub update_tables_with_templates
                             pkglist      => $pkglistfile,
                             otherpkglist => $otherpkgsfile,
                             otherpkgdir => "$installroot/post/otherpkgs/$osver/$arch");
+                        my ($existing) = $linuximagetab->getAttribs({ imagename => $imagename }, 'pkgdir');
+                        unless ($existing) {
+                            $tb_cols{addkcmdline} = "quiet";
+                        }
+
                         $linuximagetab->setAttribs(\%key_col, \%tb_cols);
 
                     } else {
@@ -1096,6 +1101,10 @@ sub update_tables_with_mgt_image
                             pkglist      => $pkglistfile,
                             otherpkglist => $otherpkgsfile,
                             otherpkgdir => "$installroot/post/otherpkgs/$osver/$arch");
+                        my ($existing) = $linuximagetab->getAttribs({ imagename => $imagename }, 'pkgdir');
+                        unless ($existing) {
+                            $tb_cols{addkcmdline} = "quiet";
+                        }
                         $linuximagetab->setAttribs(\%key_col, \%tb_cols);
 
                     } else {
@@ -1325,6 +1334,10 @@ sub update_tables_with_diskless_image
                             exlist      => $exlistfile,
                             postinstall => $postfile,
                             rootimgdir => "$installroot/netboot/$osver/$arch/$profile");
+                        my ($existing) = $linuximagetab->getAttribs({ imagename => $imagename }, 'pkgdir');
+                        unless ($existing) {
+                            $tb_cols{addkcmdline} = "quiet";
+                        }
                         $linuximagetab->setAttribs(\%key_col, \%tb_cols);
 
                     } else {

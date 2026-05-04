@@ -1331,12 +1331,12 @@ sub mkinstall
                 $kcmdline = "ksdevice=bootif kssendmac text selinux=0 rd.dm=0 rd.md=0 repo=$httpmethod://$instserver:$httpport$httpprefix/packages/ kvmp.inst.auto=$httpmethod://$instserver:$httpport/install/autoinst/$node root=live:$httpmethod://$instserver:$httpport$httpprefix/LiveOS/squashfs.img";
             } else {
                 if (xCAT::Utils->version_cmp($kversion, "7.0") < 0) {
-                    $kcmdline = "quiet repo=$httpmethod://$instserver:$httpport$httpprefix ks=$httpmethod://"
+                    $kcmdline = "repo=$httpmethod://$instserver:$httpport$httpprefix ks=$httpmethod://"
                       . $instserver . ":" . $httpport
                       . "/install/autoinst/"
                       . $node;
                 } else {
-                    $kcmdline = "quiet inst.repo=$httpmethod://$instserver:$httpport$httpprefix inst.ks="
+                    $kcmdline = "inst.repo=$httpmethod://$instserver:$httpport$httpprefix inst.ks="
                       . "$httpmethod://"
                       . $instserver . ":" . $httpport
                       . "/install/autoinst/"
