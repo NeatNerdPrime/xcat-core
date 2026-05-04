@@ -9,7 +9,7 @@ Advanced Topics
    migration/index.rst
    confluent/index.rst
    goconserver/index.rst
-   docker/index.rst
+   docker/dockerized_xcat/run_xcat_in_docker_host.rst
    domain_name_resolution/index.rst
    gpu/index.rst
    hamn/index.rst

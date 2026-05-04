@@ -19,7 +19,7 @@ SYNOPSIS
 ********
 
 
-\ **node Attributes:**\   \ *addkcmdline*\ , \ *appstatus*\ , \ *appstatustime*\ , \ *arch*\ , \ *authdomain*\ , \ *authkey*\ , \ *authtype*\ , \ *bmc*\ , \ *bmcpassword*\ , \ *bmcport*\ , \ *bmcusername*\ , \ *bmcvlantag*\ , \ *cfgmgr*\ , \ *cfgmgtroles*\ , \ *cfgserver*\ , \ *chain*\ , \ *chassis*\ , \ *cmdmapping*\ , \ *community*\ , \ *cons*\ , \ *conserver*\ , \ *consoleenabled*\ , \ *consoleondemand*\ , \ *consport*\ , \ *cpucount*\ , \ *cputype*\ , \ *currchain*\ , \ *currstate*\ , \ *dhcpinterfaces*\ , \ *disksize*\ , \ *displayname*\ , \ *dockercpus*\ , \ *dockerflag*\ , \ *dockerhost*\ , \ *dockermemory*\ , \ *dockernics*\ , \ *domainadminpassword*\ , \ *domainadminuser*\ , \ *domaintype*\ , \ *getmac*\ , \ *groups*\ , \ *hcp*\ , \ *height*\ , \ *hidden*\ , \ *hostcluster*\ , \ *hostinterface*\ , \ *hostmanager*\ , \ *hostnames*\ , \ *hosttype*\ , \ *hwtype*\ , \ *id*\ , \ *initrd*\ , \ *installnic*\ , \ *interface*\ , \ *ip*\ , \ *iscsipassword*\ , \ *iscsiserver*\ , \ *iscsitarget*\ , \ *iscsiuserid*\ , \ *kcmdline*\ , \ *kernel*\ , \ *linkports*\ , \ *mac*\ , \ *memory*\ , \ *mgt*\ , \ *micbridge*\ , \ *michost*\ , \ *micid*\ , \ *miconboot*\ , \ *micpowermgt*\ , \ *micvlog*\ , \ *migrationdest*\ , \ *monserver*\ , \ *mpa*\ , \ *mtm*\ , \ *nameservers*\ , \ *netboot*\ , \ *nfsdir*\ , \ *nfsserver*\ , \ *nicaliases*\ , \ *niccustomscripts*\ , \ *nicdevices*\ , \ *nicextraparams*\ , \ *nichostnameprefixes*\ , \ *nichostnamesuffixes*\ , \ *nicips*\ , \ *nicnetworks*\ , \ *nicsadapter*\ , \ *nictypes*\ , \ *nimserver*\ , \ *node*\ , \ *nodetype*\ , \ *ondiscover*\ , \ *os*\ , \ *osvolume*\ , \ *otherinterfaces*\ , \ *ou*\ , \ *outlet*\ , \ *parent*\ , \ *passwd.HMC*\ , \ *passwd.admin*\ , \ *passwd.celogin*\ , \ *passwd.general*\ , \ *passwd.hscroot*\ , \ *password*\ , \ *pdu*\ , \ *pdutype*\ , \ *postbootscripts*\ , \ *postscripts*\ , \ *power*\ , \ *pprofile*\ , \ *prescripts-begin*\ , \ *prescripts-end*\ , \ *primarynic*\ , \ *primarysn*\ , \ *privkey*\ , \ *privtype*\ , \ *productkey*\ , \ *profile*\ , \ *protocol*\ , \ *provmethod*\ , \ *rack*\ , \ *room*\ , \ *routenames*\ , \ *seclevel*\ , \ *serial*\ , \ *serialflow*\ , \ *serialport*\ , \ *serialspeed*\ , \ *servicenode*\ , \ *setupconserver*\ , \ *setupdhcp*\ , \ *setupftp*\ , \ *setupipforward*\ , \ *setupldap*\ , \ *setupnameserver*\ , \ *setupnfs*\ , \ *setupnim*\ , \ *setupntp*\ , \ *setupproxydhcp*\ , \ *setuptftp*\ , \ *sfp*\ , \ *side*\ , \ *slot*\ , \ *slotid*\ , \ *slots*\ , \ *snmpauth*\ , \ *snmppassword*\ , \ *snmpprivacy*\ , \ *snmpuser*\ , \ *snmpusername*\ , \ *snmpversion*\ , \ *status*\ , \ *statustime*\ , \ *storagcontroller*\ , \ *storagetype*\ , \ *supernode*\ , \ *supportedarchs*\ , \ *supportproxydhcp*\ , \ *switch*\ , \ *switchinterface*\ , \ *switchport*\ , \ *switchtype*\ , \ *switchvlan*\ , \ *syslog*\ , \ *termport*\ , \ *termserver*\ , \ *tftpdir*\ , \ *tftpserver*\ , \ *unit*\ , \ *updatestatus*\ , \ *updatestatustime*\ , \ *urlpath*\ , \ *usercomment*\ , \ *userid*\ , \ *username*\ , \ *vmbeacon*\ , \ *vmbootorder*\ , \ *vmcfgstore*\ , \ *vmcluster*\ , \ *vmcpus*\ , \ *vmhost*\ , \ *vmmanager*\ , \ *vmmaster*\ , \ *vmmemory*\ , \ *vmnicnicmodel*\ , \ *vmnics*\ , \ *vmothersetting*\ , \ *vmphyslots*\ , \ *vmstorage*\ , \ *vmstoragecache*\ , \ *vmstorageformat*\ , \ *vmstoragemodel*\ , \ *vmtextconsole*\ , \ *vmvirtflags*\ , \ *vmvncport*\ , \ *webport*\ , \ *xcatmaster*\ , \ *zonename*\ 
+\ **node Attributes:**\   \ *addkcmdline*\ , \ *appstatus*\ , \ *appstatustime*\ , \ *arch*\ , \ *authdomain*\ , \ *authkey*\ , \ *authtype*\ , \ *bmc*\ , \ *bmcpassword*\ , \ *bmcport*\ , \ *bmcusername*\ , \ *bmcvlantag*\ , \ *cfgmgr*\ , \ *cfgmgtroles*\ , \ *cfgserver*\ , \ *chain*\ , \ *chassis*\ , \ *cmdmapping*\ , \ *community*\ , \ *cons*\ , \ *conserver*\ , \ *consoleenabled*\ , \ *consoleondemand*\ , \ *consport*\ , \ *cpucount*\ , \ *cputype*\ , \ *currchain*\ , \ *currstate*\ , \ *dhcpinterfaces*\ , \ *disksize*\ , \ *displayname*\ , \ *domainadminpassword*\ , \ *domainadminuser*\ , \ *domaintype*\ , \ *getmac*\ , \ *groups*\ , \ *hcp*\ , \ *height*\ , \ *hidden*\ , \ *hostcluster*\ , \ *hostinterface*\ , \ *hostmanager*\ , \ *hostnames*\ , \ *hosttype*\ , \ *hwtype*\ , \ *id*\ , \ *initrd*\ , \ *installnic*\ , \ *interface*\ , \ *ip*\ , \ *iscsipassword*\ , \ *iscsiserver*\ , \ *iscsitarget*\ , \ *iscsiuserid*\ , \ *kcmdline*\ , \ *kernel*\ , \ *linkports*\ , \ *mac*\ , \ *memory*\ , \ *mgt*\ , \ *micbridge*\ , \ *michost*\ , \ *micid*\ , \ *miconboot*\ , \ *micpowermgt*\ , \ *micvlog*\ , \ *migrationdest*\ , \ *monserver*\ , \ *mpa*\ , \ *mtm*\ , \ *nameservers*\ , \ *netboot*\ , \ *nfsdir*\ , \ *nfsserver*\ , \ *nicaliases*\ , \ *niccustomscripts*\ , \ *nicdevices*\ , \ *nicextraparams*\ , \ *nichostnameprefixes*\ , \ *nichostnamesuffixes*\ , \ *nicips*\ , \ *nicnetworks*\ , \ *nicsadapter*\ , \ *nictypes*\ , \ *nimserver*\ , \ *node*\ , \ *nodetype*\ , \ *ondiscover*\ , \ *os*\ , \ *osvolume*\ , \ *otherinterfaces*\ , \ *ou*\ , \ *outlet*\ , \ *parent*\ , \ *passwd.HMC*\ , \ *passwd.admin*\ , \ *passwd.celogin*\ , \ *passwd.general*\ , \ *passwd.hscroot*\ , \ *password*\ , \ *pdu*\ , \ *pdutype*\ , \ *postbootscripts*\ , \ *postscripts*\ , \ *power*\ , \ *pprofile*\ , \ *prescripts-begin*\ , \ *prescripts-end*\ , \ *primarynic*\ , \ *primarysn*\ , \ *privkey*\ , \ *privtype*\ , \ *productkey*\ , \ *profile*\ , \ *protocol*\ , \ *provmethod*\ , \ *rack*\ , \ *room*\ , \ *routenames*\ , \ *seclevel*\ , \ *serial*\ , \ *serialflow*\ , \ *serialport*\ , \ *serialspeed*\ , \ *servicenode*\ , \ *setupconserver*\ , \ *setupdhcp*\ , \ *setupftp*\ , \ *setupipforward*\ , \ *setupldap*\ , \ *setupnameserver*\ , \ *setupnfs*\ , \ *setupnim*\ , \ *setupntp*\ , \ *setupproxydhcp*\ , \ *setuptftp*\ , \ *sfp*\ , \ *side*\ , \ *slot*\ , \ *slotid*\ , \ *slots*\ , \ *snmpauth*\ , \ *snmppassword*\ , \ *snmpprivacy*\ , \ *snmpuser*\ , \ *snmpusername*\ , \ *snmpversion*\ , \ *status*\ , \ *statustime*\ , \ *storagcontroller*\ , \ *storagetype*\ , \ *supernode*\ , \ *supportedarchs*\ , \ *supportproxydhcp*\ , \ *switch*\ , \ *switchinterface*\ , \ *switchport*\ , \ *switchtype*\ , \ *switchvlan*\ , \ *syslog*\ , \ *termport*\ , \ *termserver*\ , \ *tftpdir*\ , \ *tftpserver*\ , \ *unit*\ , \ *updatestatus*\ , \ *updatestatustime*\ , \ *urlpath*\ , \ *usercomment*\ , \ *userid*\ , \ *username*\ , \ *vmbeacon*\ , \ *vmbootorder*\ , \ *vmcfgstore*\ , \ *vmcluster*\ , \ *vmcpus*\ , \ *vmhost*\ , \ *vmmanager*\ , \ *vmmaster*\ , \ *vmmemory*\ , \ *vmnicnicmodel*\ , \ *vmnics*\ , \ *vmothersetting*\ , \ *vmphyslots*\ , \ *vmstorage*\ , \ *vmstoragecache*\ , \ *vmstorageformat*\ , \ *vmstoragemodel*\ , \ *vmtextconsole*\ , \ *vmvirtflags*\ , \ *vmvncport*\ , \ *webport*\ , \ *xcatmaster*\ , \ *zonename*\ 
 
 
 ***********
@@ -270,48 +270,6 @@ node Attributes:
 \ **displayname**\  (mpa.displayname)
  
  Alternative name for BladeCenter chassis. Only used by PCM.
- 
-
-
-\ **dockercpus**\  (vm.cpus)
- 
- Number of CPUs the node should see.
- 
-
-
-\ **dockerflag**\  (vm.othersettings)
- 
- This is a semicolon-delimited list of key-value pairs to be included in a vmx file of VMware or KVM. DO NOT use 'chdef <node> -p|-m vmothersetting=...' to add options to it or delete options from it because chdef uses commas, not semicolons, to separate items.
-           Hugepage on POWER systems:
-              Specify the hugepage and/or bsr (Barrier Synchronization Register) values, e.g., 'hugepage:1,bsr:2'.
-           KVM CPU mode:
-              Specify how the host CPUs are utilized, e.g., 'cpumode:host-passthrough', 'cpumode:host-model'. With the passthrough mode, the performance of x86 VMs can be improved significantly.
-           KVM CPU pinning:
-              Specify which host CPUs are used, e.g., 'vcpupin:'0-15,^8', where '-' denotes the range and '^' denotes exclusion. This option allows a comma-delimited list.
-           KVM memory binding:
-              Specify which nodes that host memory are used, e.g., 'membind:0', where the memory in node0 of the hypervisor is used. /sys/devices/system/node has node0 and node8 on some POWER systems, node0 and node1 on some x86_64 systems. This option allows a guest VM to access specific memory regions.
-           PCI passthrough:
-              PCI devices can be assigned to a virtual machine for exclusive usage, e.g., 'devpassthrough:pci_0001_01_00_0,pci_0000_03_00_0'. A PCI device can also be expressed as 'devpassthrough:0001:01:00.1'. The devices are put in a comma-delimited list. The PCI device names can be obtained by running \ **virsh nodedev-list**\  on the host.
-           VM machine type:
-              Specify a machine type for VM creation on the host, e.g., 'machine:pc'. Typical machine types are pc, q35, and pseries.
- 
-
-
-\ **dockerhost**\  (vm.host)
- 
- The system that currently hosts the VM
- 
-
-
-\ **dockermemory**\  (vm.memory)
- 
- Megabytes of memory the VM currently should be set to.
- 
-
-
-\ **dockernics**\  (vm.nics)
- 
- Network configuration parameters.  Of the general form [physnet:]interface,.. Generally, interface describes the vlan entity (default for native, tagged for tagged, vl[number] for a specific vlan.  physnet is a virtual switch name or port description that is used for some virtualization technologies to construct virtual switches.  hypervisor.netmap can map names to hypervisor specific layouts, or the descriptions described there may be used directly here where possible. A macvtap device can be created by adding the "|direct" suffix to the interface name.
  
 
 

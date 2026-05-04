@@ -2797,38 +2797,6 @@ my @nodeattrs = (
         access_tabentry => 'vm.node=attr:node',
     },
 
-############################################
-    # docker attributes are mapped to vm table #
-    # dockerhost --> vm.host
-    # dockercpus  --> vm.cpus
-    # dockermemory --> vm.memory
-    # dockerflag --> vm.othersettings
-    # dockernics --> vm.nics
-    { attr_name => 'dockerhost',
-        only_if         => 'mgt=docker',
-        tabentry        => 'vm.host',
-        access_tabentry => 'vm.node=attr:node',
-    },
-    { attr_name => 'dockercpus',
-        only_if         => 'mgt=docker',
-        tabentry        => 'vm.cpus',
-        access_tabentry => 'vm.node=attr:node',
-    },
-    { attr_name => 'dockermemory',
-        only_if         => 'mgt=docker',
-        tabentry        => 'vm.memory',
-        access_tabentry => 'vm.node=attr:node',
-    },
-    { attr_name => 'dockerflag',
-        only_if         => 'mgt=docker',
-        tabentry        => 'vm.othersettings',
-        access_tabentry => 'vm.node=attr:node',
-    },
-    { attr_name => 'dockernics',
-        only_if         => 'mgt=docker',
-        tabentry        => 'vm.nics',
-        access_tabentry => 'vm.node=attr:node',
-    },
 ######################
     #  hypervisor table      #
 ######################
