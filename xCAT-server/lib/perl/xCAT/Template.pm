@@ -123,9 +123,11 @@ sub subvars {
 
     $ENV{XCATMASTER} = $master;
     my $ipaddr = xCAT::NetworkUtils->getipaddr($master);
-    if ($ipaddr) {
-        $ENV{MASTER_IP} = "$ipaddr";
+    unless ($ipaddr) {
+        $tmplerr = "Unable to resolve master \"$master\" to an IP address for $node";
+        return;
     }
+    $ENV{MASTER_IP} = "$ipaddr";
 
     my @nodestatus = xCAT::TableUtils->get_site_attribute("nodestatus");
     my $tmp        = $nodestatus[0];
