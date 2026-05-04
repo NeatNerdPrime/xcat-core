@@ -400,6 +400,10 @@ sub process_request {
                 #   print FILE "\n";
                 #}
                 #close FILE;
+        if ($::RUNCMD_RC != 0) {
+            $callback->({ error => ["genimage command failed with rc $::RUNCMD_RC."], errorcode => [$::RUNCMD_RC] });
+            return $::RUNCMD_RC;
+        }
 
         # update the generated initrd to /tftpboot/xcat so that don't need to rerun nodeset to update them
         if (($::RUNCMD_RC == 0) && $imagename) {

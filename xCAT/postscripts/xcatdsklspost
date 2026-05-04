@@ -681,6 +681,10 @@ fi
 
 if [ ! -x /$xcatpost/mypostscript ]; then
   echolog "debug" "no pre-generated mypostscript.<nodename>, trying to get it with getpostscript.awk..."
+  GETPOSTSCRIPT_ARGS=""
+  if [ -n "$node_short" ]; then
+      GETPOSTSCRIPT_ARGS="$node_short"
+  fi
   if [ $useflowcontrol = "1" ]; then
     # first contact daemon  xcatflowrequest <server> 3001
     #logger -t xCAT -p local4.info "xcatdsklspost:sending xcatflowrequest $SIP 3001"
@@ -695,7 +699,7 @@ if [ ! -x /$xcatpost/mypostscript ]; then
       useflowcontrol=0
     fi
   fi
-  /$xcatpost/getpostscript.awk | egrep  '<data>' | sed  -e 's/<[^>]*>//g'|egrep -v '^ *$'|sed -e 's/^ *//' | sed -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g' -e 's/&quot;/"/g' -e "s/&apos;/'/g" >  /$xcatpost/mypostscript;
+  /$xcatpost/getpostscript.awk $GETPOSTSCRIPT_ARGS | egrep  '<data>' | sed  -e 's/<[^>]*>//g'|egrep -v '^ *$'|sed -e 's/^ *//' | sed -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g' -e 's/&quot;/"/g' -e "s/&apos;/'/g" >  /$xcatpost/mypostscript;
 
 
  MYCONT=`grep MASTER /$xcatpost/mypostscript`
@@ -729,12 +733,16 @@ if [ ! -x /$xcatpost/mypostscript ]; then
         useflowcontrol=0
       fi
     fi
-    /$xcatpost/getpostscript.awk | egrep  '<data>' | sed  -e 's/<[^>]*>//g'|egrep -v '^ *$'|sed -e 's/^ *//' | sed -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g' -e 's/&quot;/"/g' -e "s/&apos;/'/g" >  /$xcatpost/mypostscript;
+    /$xcatpost/getpostscript.awk $GETPOSTSCRIPT_ARGS | egrep  '<data>' | sed  -e 's/<[^>]*>//g'|egrep -v '^ *$'|sed -e 's/^ *//' | sed -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g' -e 's/&quot;/"/g' -e "s/&apos;/'/g" >  /$xcatpost/mypostscript;
     MYCONT=`grep MASTER /$xcatpost/mypostscript`
     if [ ! -z "$MYCONT" ]; then
         break;
     fi
  done
+ if [ -z "$MYCONT" ]; then
+    echolog "err" "failed to get mypostscript from $SIP"
+    exit 1
+ fi
 fi
 
 #save the MASTER into the xcatinfo file for node deployment case,

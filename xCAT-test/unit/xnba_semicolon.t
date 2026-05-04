@@ -28,4 +28,10 @@ like($src, qr/sub _write_uefi_exit_script\b/, 'UEFI local boot helper exists');
 like($src, qr/_write_uefi_exit_script\(\$bootloader_root, \$node, \$cref->\{currstate\}\);/, 'boot/local states rewrite UEFI xNBA script');
 like($src, qr/print \$ucfg "exit\\n";/, 'UEFI local boot script exits iPXE to firmware');
 
+# SLES 11 advertises EFI stub support, but the live UEFI xNBA path corrupts
+# the legacy initrd/root image handoff.  It must keep using elilo.
+like($src, qr/sub _use_efistub_for_uefi\b/, 'UEFI EFI-stub selection helper exists');
+like($src, qr/sles\?11/, 'SLES 11 UEFI compatibility rule matches sle11 and sles11 images');
+like($src, qr/if \(_use_efistub_for_uefi\(\$kern\)\)/, 'UEFI boot path uses compatibility helper before direct EFI-stub boot');
+
 done_testing();
