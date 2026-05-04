@@ -8,12 +8,22 @@ AliasMatch ^/install/(.*)$ "/install/$1"
 AliasMatch ^/tftpboot/(.*)$ "/tftpboot/$1"
 
 <Directory "/tftpboot">
-    Options Indexes FollowSymLinks Includes MultiViews
+    Options FollowSymLinks Includes MultiViews
     AllowOverride None
     Require all granted
 </Directory>
 <Directory "/install">
-    Options Indexes FollowSymLinks Includes MultiViews
+    Options FollowSymLinks Includes MultiViews
+    AllowOverride None
+    Require all granted
+</Directory>
+<Directory "/install/postscripts">
+    Options Indexes FollowSymLinks
+    AllowOverride None
+    Require all granted
+</Directory>
+<Directory "/install/post">
+    Options Indexes FollowSymLinks
     AllowOverride None
     Require all granted
 </Directory>
