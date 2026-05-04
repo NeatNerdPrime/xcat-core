@@ -60,9 +60,9 @@ binary-arch:
 	dh_makeshlibs
 	dh_installdeb
 	dh_shlibdeps
-	dh_gencontrol
+	dh_gencontrol -- -Vperl:Depends=perl
 	dh_md5sums
-	dh_builddeb
+	dh_builddeb -- -Zgzip
 
 binary: binary-indep binary-arch
 .PHONY: build clean binary-indep binary-arch binary install configure

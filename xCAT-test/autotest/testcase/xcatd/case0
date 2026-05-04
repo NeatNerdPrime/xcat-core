@@ -3,7 +3,7 @@ description:stop then start xcatd daemon, and check all the 6 processes are runn
 label:mn_only,ci_test,xcatd
 cmd:if [ -d "/tmp/xcatd_start" ]; then mv /tmp/xcatd_start /tmp/xcatd_start.org; fi; mkdir -p /tmp/xcatd_start
 check:rc==0
-cmd:service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl status xcatd; else service xcatd status; fi
 check:rc==0
 check:output=~xcatd service|xcatd.service
 check:output=~Active: active \(running\)|xcatd service is running
@@ -11,17 +11,17 @@ cmd:ps axjf |grep -v grep |grep "xcatd:" | tee /tmp/xcatd_start/original_xcatd_p
 check:rc==0
 cmd:cat /tmp/xcatd_start/original_xcatd_processes_status |wc -l
 #check:output=~6
-cmd:service xcatd stop
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl stop xcatd; else service xcatd stop; fi
 check:rc==0
 cmd:sleep 3
 cmd:ps axjf |grep -v grep |grep "xcatd:" | tee /tmp/xcatd_start/after_stop_xcatd_processes_status
 check:rc==0
 cmd:cat /tmp/xcatd_start/after_stop_xcatd_processes_status|wc -l
 check:output=~0
-cmd:service xcatd start
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl start xcatd; else service xcatd start; fi
 check:rc==0
 cmd:sleep 3
-cmd:service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl status xcatd; else service xcatd status; fi
 check:rc==0
 check:output=~xcatd service|xcatd.service
 check:output=~Active: active \(running\)|xcatd service is running
@@ -49,17 +49,17 @@ end
 start:xcatd_stop
 description:stop xcatd daemon, then check all the 6 processes are stopped
 label:mn_only,ci_test,xcatd
-cmd:service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl status xcatd; else service xcatd status; fi
 check:rc==0
 check:output=~xcatd service|xcatd.service
 check:output=~xcatd service is running|active \(running\)
-cmd:service xcatd stop
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl stop xcatd; else service xcatd stop; fi
 check:rc==0
 cmd:sleep 3
 cmd:ps axjf |grep -v grep |grep "xcatd:" | wc -l
 check:rc==0
 check:output=~0
-cmd:service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl status xcatd; else service xcatd status; fi
 check:output=~xcatd service|xcatd.service
 check:output=~xcatd service is not running|inactive \(dead\)
 cmd:ps -ef | grep xcatd
@@ -69,7 +69,7 @@ check:output!~"xcatd: UDP listener"
 check:output!~"xcatd: install monitor"
 check:output!~"xcatd: Discovery worke"
 check:output!~"xcatd: Command log writer"
-cmd:service xcatd start
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl start xcatd; else service xcatd start; fi
 check:rc==0
 end
 
@@ -77,14 +77,14 @@ end
 start:xcatd_restart
 description:restart xcatd daemon
 label:mn_only,xcatd
-cmd:service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl status xcatd; else service xcatd status; fi
 check:output=~xcatd service|xcatd.service
 check:output=~xcatd service is running|active \(running\)
 check:rc==0
-cmd:service xcatd restart
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl restart xcatd; else service xcatd restart; fi
 check:rc==0
 cmd:sleep 10
-cmd:service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl status xcatd; else service xcatd status; fi
 check:output=~xcatd service|xcatd.service
 check:output=~xcatd service is running|active \(running\)
 check:rc==0
@@ -95,27 +95,27 @@ end
 start:run_command_with_XCATBYPASS
 description:with XCATBYPASS=YES, the command works either xcatd deamon running or not
 label:mn_only,ci_test,xcatd
-cmd:service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl status xcatd; else service xcatd status; fi
 check:rc==0
 check:output=~xcatd service|xcatd.service
 check:output=~xcatd service is running|active \(running\)
 cmd:XCATBYPASS=YES tabdump site
 check:rc==0
-cmd:service xcatd stop
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl stop xcatd; else service xcatd stop; fi
 check:rc==0
 cmd:sleep 3
 cmd:ps aux|tee /tmp/run_command_with_XCATBYPASS.log
 cmd:awk '{print $11}' /tmp/run_command_with_XCATBYPASS.log|grep -E ^xcatd
 check:rc!=0
 cmd:rm -rf /tmp/run_command_with_XCATBYPASS.log
-cmd:service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl status xcatd; else service xcatd status; fi
 cmd:tabdump site
 check:rc!=0
 cmd:XCATBYPASS=YES tabdump site
 check:rc==0
-cmd:service xcatd start
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl start xcatd; else service xcatd start; fi
 check:rc==0
-cmd:service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl status xcatd; else service xcatd status; fi
 check:rc==0
 check:output=~xcatd service|xcatd.service
 check:output=~xcatd service is running|active \(running\)
@@ -124,7 +124,7 @@ end
 start:disable_root_permission_in_policy_table
 description:disable root permission, only with XCATBYPASS=YES, the command works
 label:mn_only,ci_test,xcatd
-cmd:service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl status xcatd; else service xcatd status; fi
 check:rc==0
 check:output=~ xcatd service|xcatd.service
 check:output=~xcatd service is running|active \(running\)
@@ -144,7 +144,7 @@ end
 start:assign_certain_command_permission
 description:assign root permission to certain command, only this command works
 label:mn_only,ci_test,xcatd
-cmd:service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl status xcatd; else service xcatd status; fi
 check:rc==0
 check:output=~ xcatd service |xcatd.service
 check:output=~xcatd service is running|active \(running\)
@@ -165,17 +165,17 @@ end
 start:reload_xcatd_with_XCATBYPASS
 description:with XCATBYPASS=YES, there is no error when restart xcatd deamon. This case is add test case for issue 2727 : run xCAT in "XCATBYPASS" mode and simply reload xCAT to check if there is any errors. 
 label:mn_only,ci_test,xcatd
-cmd:service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then systemctl status xcatd; else service xcatd status; fi
 check:rc==0
 check:output=~xcatd service|xcatd.service
 check:output=~xcatd service is running|active \(running\)
 cmd:XCATBYPASS=YES lsxcatd -a
 check:rc==0
 check:output!~Error|ERROR
-cmd:XCATBYPASS=YES service xcatd status
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then XCATBYPASS=YES systemctl status xcatd; else XCATBYPASS=YES service xcatd status; fi
 check:rc==0
 check:output!~Error|ERROR
-cmd:XCATBYPASS=YES service xcatd restart
+cmd:if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then XCATBYPASS=YES systemctl restart xcatd; else XCATBYPASS=YES service xcatd restart; fi
 check:rc==0
 check:output!~Error|ERROR 
 end

@@ -40,7 +40,7 @@ case "$1" in
             xcatconfig -u -V >> /var/log/xcat/upgrade.log
             rm /tmp/xCAT_upgrade.tmp
         else
-            xcatconfig -i -d -s
+            xcatconfig -i
         fi
 
         ln -s -f /etc/apache2/conf-available/xcat.conf.apach24 /etc/apache2/conf-enabled/xcat.conf
