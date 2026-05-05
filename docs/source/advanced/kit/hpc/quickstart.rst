@@ -77,7 +77,7 @@ The following software kits will be used to install the IBM HPC software stack o
 
        The ESSL software kit has an *external dependency* to the ``libxlf`` which is provided in the XLF software kit.  Since it's already added in the above step, there is no action needed here.
 
-       If CUDA toolkit is being used, ESSL has a runtime dependency on the CUDA rpms.  The administrator needs to create the repository for the CUDA 7.5 toolkit or a runtime error will occur when provisioning the node.  See the :doc:`/advanced/gpu/nvidia/repo/index` section for more details about setting up the CUDA repository on the xCAT management node. ::
+       If CUDA toolkit is being used, ESSL has a runtime dependency on the CUDA rpms.  The administrator needs to create the repository for the CUDA 7.5 toolkit or a runtime error will occur when provisioning the node.  See the :doc:`/advanced/gpu/nvidia/repo_setup` section for more details about setting up the CUDA repository on the xCAT management node. ::
 
         #
         # Assuming that the cuda repo has been configured at:
