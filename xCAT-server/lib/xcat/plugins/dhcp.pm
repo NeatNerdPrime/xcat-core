@@ -415,7 +415,11 @@ sub addnode6 {
     $uuid =~ s/:\z//;
     $uuid =~ s/^/00:04:/;
     my $ip = getipaddr($node);
-    if ($ip and $ip =~ /:/ and not ipIsDynamic($ip)) {
+    if ($ip and $ip =~ /:/ and ipIsDynamic($ip)) {
+        $callback->({ error => ["Node $node has IPv6 address $ip which is inside the DHCP dynamic range. Move the node IP outside the dynamic range or adjust the range in the networks table."], errorcode => [1] });
+        return;
+    }
+    if ($ip and $ip =~ /:/) {
         $ip = getipaddr($ip, GetNumber => 1);
         $ip = $ip->as_hex;
         $ip =~ s/^0x//;
@@ -635,6 +639,19 @@ sub addnode
                 }
             );
         }
+
+        if ($ip and $ip ne 'DENIED' and ipIsDynamic($ip))
+        {
+            $callback->(
+                {
+                    error => [
+                        "Node $node has IP $ip which is inside the DHCP dynamic range. Move the node IP outside the dynamic range or adjust the range in the networks table."
+                      ],
+                    errorcode => [1]
+                }
+            );
+            next;
+        }
         my $doiscsi = 0;
         if ($ient and $ient->{server} and $ient->{target}) {
             $doiscsi = 1;
@@ -787,21 +804,8 @@ sub addnode
             }
             else
             {
-                if ($ip and not ipIsDynamic($ip)) {
+                if ($ip) {
                     print $omshell "set ip-address = $ip\n";
-                } else {
-
-                    # only if when ip is not blank, blank ip warning already done earlier in the code
-                    if ($ip)
-                    {
-                        $callback->(
-                            {
-                                warning => [
-            "The ip address $ip of node $node overlaps with the DHCP dynamic range specified in networks table, will not add this ip address into dhcpd.leases file."
-                                  ]
-                            }
-                        );
-                    }
                 }
                 if ($lstatements)
                 {
@@ -2937,6 +2941,11 @@ sub kea_node_reservations
         my $ip = getipaddr($hname, OnlyV4 => 1);
         next unless $ip;
 
+        if (ipIsDynamic($ip)) {
+            $callback->({ error => ["Node $node has IP $ip which is inside the DHCP dynamic range. Move the node IP outside the dynamic range or adjust the range in the networks table."], errorcode => [1] });
+            next;
+        }
+
         my $subnet_id = $backend->subnet_id_for_ip($config, $ip);
         unless ($subnet_id) {
             $callback->({ warning => ["Unable to find a Kea subnet for $node ($ip), skipping DHCP reservation"] });
@@ -2947,8 +2956,8 @@ sub kea_node_reservations
             'subnet-id'  => $subnet_id,
             'hw-address' => lc($mac),
             hostname     => $hname,
+            'ip-address' => $ip,
         );
-        $reservation{'ip-address'} = $ip unless ipIsDynamic($ip);
         $reservation{'next-server'} = $nxtsrv if $nxtsrv && $nxtsrv !~ /\$\{/;
 
         my $boot = kea_boot_for_node($node, $nrent, $chainent, $ntent, $ient, $nxtsrv);
@@ -3085,6 +3094,11 @@ sub kea_node_reservations6
         my $ip = getipaddr($hname, OnlyV6 => 1);
         next unless $ip;
 
+        if (ipIsDynamic($ip)) {
+            $callback->({ error => ["Node $node has IPv6 address $ip which is inside the DHCP dynamic range. Move the node IP outside the dynamic range or adjust the range in the networks table."], errorcode => [1] });
+            next;
+        }
+
         my $subnet_id = $backend->subnet_id_for_ip($config, $ip);
         unless ($subnet_id) {
             $callback->({ warning => ["Unable to find a Kea DHCPv6 subnet for $node ($ip), skipping DHCPv6 reservation"] });
@@ -3092,15 +3106,15 @@ sub kea_node_reservations6
         }
 
         my %reservation = (
-            'subnet-id' => $subnet_id,
-            hostname    => $hname,
+            'subnet-id'    => $subnet_id,
+            hostname       => $hname,
+            'ip-addresses' => [$ip],
         );
         if ($duid) {
             $reservation{duid} = $duid;
         } else {
             $reservation{'hw-address'} = lc($mac);
         }
-        $reservation{'ip-addresses'} = [$ip] unless ipIsDynamic($ip);
 
         push @reservations, \%reservation;
     }
