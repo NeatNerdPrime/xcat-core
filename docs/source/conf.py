@@ -50,8 +50,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'xCAT'
-copyright = u'2015-2022, IBM Corporation'
-author = u'IBM Corporation'
+copyright = u'2015-2022 IBM Corporation, 2023-2026 xCAT Consortium'
+author = u'IBM Corporation, xCAT Consortium'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
