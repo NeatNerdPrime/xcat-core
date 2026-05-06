@@ -44,6 +44,19 @@ sub handled_commands
     };
 }
 
+sub precreate_sles11_mypostscript
+{
+    my ($node, $osver, $callback) = @_;
+
+    return unless ($osver =~ /^sles11/);
+
+    require xCAT::Postage;
+
+    # SLES 11 clients rely on the precreated HTTP mypostscript path more
+    # reliably than the dynamic getpostscript request.
+    xCAT::Postage::makescript([$node], undef, $callback, 1, 0);
+}
+
 sub mknetboot
 {
     my $req      = shift;
@@ -288,6 +301,8 @@ sub mknetboot
             xCAT::MsgUtils->report_node_error($callback, $node, "Insufficient nodetype entry or osimage entry for $node");
             next;
         }
+
+        precreate_sles11_mypostscript($node, $osver, $callback);
 
         #print"osvr=$osver, arch=$arch, profile=$profile, imgdir=$rootimgdir\n";
         my $platform;
@@ -967,6 +982,8 @@ sub mkinstall
             xCAT::MsgUtils->report_node_error($callback, $node, $tmperr);
             next;
         }
+
+        precreate_sles11_mypostscript($node, $os, $callback);
 
         # create the node-specific post script DEPRECATED, don't do
         #mkpath "/install/postscripts/";

@@ -25,6 +25,15 @@ SLI=$(awk 'BEGIN{srand(); printf("%d\n",rand()*10)}')
 sleep $SLI
 
 XCATINFOFILE=/opt/xcat/xcatinfo
+if [ -z "$MASTER_IP" ] && [ -f "$XCATINFOFILE" ]; then
+    MASTER_IP=`grep '^XCATSERVER=' "$XCATINFOFILE" | head -n 1 | cut -d= -f2 | cut -d: -f1 | tr -d \'\"`
+fi
+
+if [ -z "$MASTER_IP" ]; then
+   msgutil_r "" "error" "Unable to determine the xCAT master for postboot scripts." "/var/log/xcat/xcat.log" "$log_label"
+   exit 1
+fi
+
 MACADDR=`grep MACADDRESS= /xcatpost/mypostscript.post | awk -F = '{ print $2 }'| sed "s/\'//g"`
 INSTALLNIC=`ip -o link | grep -i "$MACADDR" | awk '{ print $2 }' | sed "s/://"`
 
@@ -34,7 +43,7 @@ INSTALLNIC=`ip -o link | grep -i "$MACADDR" | awk '{ print $2 }' | sed "s/://"`
 RETRY=0
 while true; do
     #check whether the network access between MN/CN and the node is ready
-    ping $MASTER_IP -c 1 >/dev/null && break
+    ping -c 1 $MASTER_IP >/dev/null && break
 
     RETRY=$[ $RETRY + 1 ]
 

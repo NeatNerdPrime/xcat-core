@@ -110,6 +110,23 @@ sub has_efistub {
         return 0;
     }
 }
+
+sub _use_efistub_for_uefi {
+    my $kern = shift;
+    return 0 unless has_efistub($kern->{kernel});
+
+    my $kernel_path = $kern->{kernel}   || '';
+    my $initrd_path = $kern->{initrd}   || '';
+    my $cmdline     = $kern->{kcmdline} || '';
+
+    # SLES 11 kernels advertise an EFI stub, but live UEFI xNBA boot corrupts
+    # the initrd/root image path.  Keep SLES 11 on the existing elilo path.
+    if ("$kernel_path $initrd_path $cmdline" =~ m{(?:^|[=/\s_-])sles?11(?:[.\s/_-]|$)}i) {
+        return 0;
+    }
+
+    return 1;
+}
 sub setstate {
 
 =pod
@@ -330,7 +347,7 @@ sub setstate {
                 if ($kern->{kcmdline} and $kern->{initrd}) { #only a linux kernel/initrd pair should land here, write elilo config and uefi variant of xnba config file
                     my $ucfg;
                     open($ucfg, '>', $tftpdir . "/xcat/xnba/nodes/" . $node . ".uefi");
-                    if (has_efistub($kern->{kernel}, $node)) {
+                    if (_use_efistub_for_uefi($kern)) {
                         print $ucfg "#!gpxe\n";
                         print $ucfg "imgfetch -n kernel http://" . '${next-server}:' . $httpport.'/tftpboot/' . $kern->{kernel} . "\n";
                         print $ucfg "imgload kernel\n";

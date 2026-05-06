@@ -94,7 +94,9 @@ sub umount {
 
 # Make sure we clean up all mounts everytime
 END {
+    my $exitstatus = $?;
     umount();
+    $? = $exitstatus;
 }
 
 #-- fetch current version form CVS (overwrite locally changed versions)
@@ -2091,9 +2093,11 @@ sub generic_post { # This function is meant to leave the image in a state approx
         print $cfgfile "if [ -n \"\$VERS\" ]; then\n";
         print $cfgfile "  VERNUM=`echo \$VERS|awk -F= \'{print \$2}\'|awk -F- \'{print \$1}\'|sed -e \'s/ //g\'|sed -e \'s/\"//g\'`\n";
         print $cfgfile "fi\n";
-        print $cfgfile "if [ \"\$VERNUM\" -gt 10 ]; then\n";
-        print $cfgfile "  exit\n";
-        print $cfgfile "fi\n";
+        print $cfgfile "VERMAJOR=`echo \$VERNUM|sed -e 's/\\..*//'`\n";
+        print $cfgfile "case \"\$VERMAJOR\" in\n";
+        print $cfgfile "  ''|*[!0-9]*) ;;\n";
+        print $cfgfile "  *) if [ \"\$VERMAJOR\" -gt 10 ]; then exit; fi ;;\n";
+        print $cfgfile "esac\n";
         print $cfgfile "\n";
         print $cfgfile "for i in `cat /proc/cmdline`; do\n";
         print $cfgfile '  KEY=`echo $i|cut -d= -f 1`' . "\n";
@@ -2117,7 +2121,12 @@ sub generic_post { # This function is meant to leave the image in a state approx
     system("mkdir -p $rootimg_dir/opt/xcat");
     copy("$installroot/postscripts/xcatpostinit", "$rootimg_dir/opt/xcat/xcatpostinit");
     chmod(0755, "$rootimg_dir/opt/xcat/xcatpostinit");
-    copy("$installroot/postscripts/xcatpostinit.service", "$rootimg_dir/usr/lib/systemd/system/xcatpostinit.service");
+    if (-d "$rootimg_dir/usr/lib/systemd/system") {
+        copy("$installroot/postscripts/xcatpostinit.service", "$rootimg_dir/usr/lib/systemd/system/xcatpostinit.service");
+    } elsif (-d "$rootimg_dir/etc/init.d") {
+        copy("$installroot/postscripts/xcatpostinit", "$rootimg_dir/etc/init.d/xcatpostinit");
+        chmod(0755, "$rootimg_dir/etc/init.d/xcatpostinit");
+    }
 
     #
     # set certain system services to start on boot, if the file exists in /etc/init.d as a script,

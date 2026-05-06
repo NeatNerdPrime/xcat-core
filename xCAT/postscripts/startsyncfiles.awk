@@ -5,9 +5,9 @@ BEGIN {
   } else {
        randombytes = ""
   }
-  if (!system("test -f openssl")) {
-       print "Error: openssl utility missing"
-       exit 1
+  if (system("command -v openssl >/dev/null 2>&1")) {
+     print "Error: openssl utility missing"
+     exit 1
   }
 
   if (ENVIRON["USEOPENSSLFORXCAT"]) {

@@ -164,6 +164,12 @@ if [ ! -x /xcatpost/mypostscript ]; then
 
         MYCONT=`grep ^MASTER= /xcatpost/mypostscript`
     done
+
+    if [ -z "$MYCONT" ]; then
+        msgutil_r "$MASTER_IP" "error" "failed to get mypostscript from $MASTER_IP, halt ..." "/var/log/xcat/xcat.log" "$log_label"
+        /tmp/updateflag $MASTER $XCATIPORT "installstatus failed"
+        sleep 36500d
+    fi
 fi
 
 TMP=`sed "/^#\s*postscripts-start-here/,/^#\s*postscripts-end-here/ s/\(.*\)/run_ps postscript \1/;s/run_ps postscript\s*#/#/;s/run_ps postscript\s*$//" /xcatpost/mypostscript`

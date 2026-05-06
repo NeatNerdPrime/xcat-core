@@ -19,6 +19,7 @@ bc
 ntp
 gzip
 e2fsprogs
+xfsprogs
 parted
 binutils
 tar
